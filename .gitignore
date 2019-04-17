@@ -1,0 +1,7 @@
+_gsdata_
+*.vpj
+*.vpw
+*.vpwhist
+*.vpwhistu
+*.vtg
+.DS_Store
