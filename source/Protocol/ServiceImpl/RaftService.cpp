@@ -1,21 +1,19 @@
 #include <other/Log.h>
+using roo::log_api;
 
 #include <message/ProtoBuf.h>
-#include <Protocol/gen-cpp/XtraTask.pb.h>
-
-#include "XtraTaskService.h"
+#include <Protocol/gen-cpp/Raft.pb.h>
 
 #include <scaffold/Setting.h>
 #include <scaffold/Status.h>
 
 #include <Captain.h>
 
-using roo::log_api;
-
+#include "RaftService.h"
 
 namespace sisyphus {
 
-bool XtraTaskService::init() {
+bool RaftService::init() {
 
     auto setting_ptr = Captain::instance().setting_ptr_->get_setting();
     if(!setting_ptr) {
@@ -71,7 +69,7 @@ bool XtraTaskService::init() {
 }
 
 // 系统启动时候初始化，持有整个锁进行
-bool XtraTaskService::handle_rpc_service_conf(const libconfig::Setting& setting) {
+bool RaftService::handle_rpc_service_conf(const libconfig::Setting& setting) {
 
     std::unique_lock<std::mutex> lock(conf_lock_);
 
@@ -99,12 +97,12 @@ bool XtraTaskService::handle_rpc_service_conf(const libconfig::Setting& setting)
 
 
 
-ExecutorConf XtraTaskService::get_executor_conf() {
+ExecutorConf RaftService::get_executor_conf() {
     SAFE_ASSERT(conf_ptr_);
     return conf_ptr_->executor_conf_;
 }
 
-int XtraTaskService::module_runtime(const libconfig::Config& conf) {
+int RaftService::module_runtime(const libconfig::Config& conf) {
 
     try {
 
@@ -134,7 +132,7 @@ int XtraTaskService::module_runtime(const libconfig::Config& conf) {
 }
 
 // 做一些可选的配置动态更新
-bool XtraTaskService::handle_rpc_service_runtime_conf(const libconfig::Setting& setting) {
+bool RaftService::handle_rpc_service_runtime_conf(const libconfig::Setting& setting) {
 
     ExecutorConf conf;
     if (RpcServiceBase::handle_rpc_service_conf(setting, conf) != 0) {
@@ -151,7 +149,7 @@ bool XtraTaskService::handle_rpc_service_runtime_conf(const libconfig::Setting& 
     return 0;
 }
 
-int XtraTaskService::module_status(std::string& module, std::string& name, std::string& val) {
+int RaftService::module_status(std::string& module, std::string& name, std::string& val) {
 
     // empty status ...
 
@@ -159,17 +157,20 @@ int XtraTaskService::module_status(std::string& module, std::string& name, std::
 }
 
 
-void XtraTaskService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
+void RaftService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    using XtraTask::OpCode;
+    using Raft::OpCode;
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc_instance->get_opcode()) {
-        case OpCode::CMD_READ:
-            read_ops_impl(rpc_instance);
+        case OpCode::kRequestVote:
+            request_vote_impl(rpc_instance);
             break;
-        case OpCode::CMD_WRITE:
-            write_ops_impl(rpc_instance);
+        case OpCode::kAppendEntries:
+            append_entries_impl(rpc_instance);
+            break;
+        case OpCode::kInstallSnapshot:
+            install_snapshot_impl(rpc_instance);
             break;
 
         default:
@@ -181,24 +182,23 @@ void XtraTaskService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 }
 
 
-void XtraTaskService::read_ops_impl(std::shared_ptr<RpcInstance> rpc_instance) {
+void RaftService::request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    // 再做一次opcode校验
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != XtraTask::OpCode::CMD_READ) {
-        log_err("invalid opcode %u in service XtraTask.", rpc_request_message.header_.opcode);
+    if (rpc_request_message.header_.opcode != Raft::OpCode::kRequestVote) {
+        log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
-
-    XtraTask::XtraReadOps::Response response;
+#if 0
+    Raft::XtraReadOps::Response response;
     response.set_code(0);
     response.set_msg("OK");
 
     do {
 
         // 消息体的unmarshal
-        XtraTask::XtraReadOps::Request request;
+        Raft::XtraReadOps::Request request;
         if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
             log_err("unmarshal request failed.");
             response.set_code(-1);
@@ -208,16 +208,16 @@ void XtraTaskService::read_ops_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
         // 相同类目下的子RPC分发
         if (request.has_ping()) {
-            log_debug("XtraTask::XtraReadOps::ping -> %s", request.ping().msg().c_str());
+            log_debug("Raft::XtraReadOps::ping -> %s", request.ping().msg().c_str());
             response.mutable_ping()->set_msg("[[[pong]]]");
             break;
         } else if (request.has_gets()) {
-            log_debug("XtraTask::XtraReadOps::get -> %s", request.gets().key().c_str());
+            log_debug("Raft::XtraReadOps::get -> %s", request.gets().key().c_str());
             response.mutable_gets()->set_value("[[[pong]]]");
             break;
         } else if (request.has_echo()) {
             std::string real_msg = request.echo().msg();
-            log_debug("XtraTask::XtraReadOps::echo -> %s", real_msg.c_str());
+            log_debug("Raft::XtraReadOps::echo -> %s", real_msg.c_str());
             response.mutable_echo()->set_msg("echo:" + real_msg);
         } else if (request.has_timeout()) {
             int32_t timeout = request.timeout().timeout();
@@ -235,21 +235,29 @@ void XtraTaskService::read_ops_impl(std::shared_ptr<RpcInstance> rpc_instance) {
     std::string response_str;
     roo::ProtoBuf::marshalling_to_string(response, &response_str);
     rpc_instance->reply_rpc_message(response_str);
+
+#endif
 }
 
-void XtraTaskService::write_ops_impl(std::shared_ptr<RpcInstance> rpc_instance) {
+void RaftService::append_entries_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    #if 0
-    PRELUDE(XtraWriteCmd);
+    RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
+    if (rpc_request_message.header_.opcode != Raft::OpCode::kAppendEntries) {
+        log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
+        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
+        return;
+    }
+}
+
+void RaftService::install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
 
-    rpc.reply(response);
-    #endif
-
-    const RpcRequestMessage& msg = rpc_instance->get_rpc_request_message();
-    log_debug(" write ops recv: %s", msg.dump().c_str());
-
-    rpc_instance->reply_rpc_message("nicol_write_reply");
+    RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
+    if (rpc_request_message.header_.opcode != Raft::OpCode::kInstallSnapshot) {
+        log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
+        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
+        return;
+    }
 }
 
 

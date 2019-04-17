@@ -23,7 +23,7 @@ using roo::log_api;
 
 #include <RPC/Dispatcher.h>
 #include <Protocol/Common.h>
-#include <Protocol/ServiceImpl/XtraTaskService.h>
+#include <Protocol/ServiceImpl/RaftService.h>
 
 #include "Captain.h"
 
@@ -90,12 +90,12 @@ bool Captain::init(const std::string& cfgFile) {
 
     // 先注册具体的服务
     // 这里的初始化是调用服务实现侧的初始化函数，意味着要完成配置读取等操作
-    std::shared_ptr<Service> xtra_task_service = std::make_shared<XtraTaskService>("XtraTaskService");
-    if (!xtra_task_service || !xtra_task_service->init()) {
-        log_err("create XtraTaskService failed.");
+    std::shared_ptr<Service> raft_service = std::make_shared<RaftService>("RaftService");
+    if (!raft_service || !raft_service->init()) {
+        log_err("create RaftService failed.");
         return false;
     }
-    Dispatcher::instance().register_service(ServiceID::XTRA_TASK_SERVICE, xtra_task_service);
+    Dispatcher::instance().register_service(ServiceID::RAFT_SERVICE, raft_service);
 
     // 再进行整体服务的初始化
     if (!Dispatcher::instance().init()) {

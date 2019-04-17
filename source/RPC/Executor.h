@@ -12,14 +12,14 @@
 #include <xtra_rhel.h>
 
 #include <other/Log.h>
-#include <container/EQueue.h>
+using roo::log_api;
 
+#include <container/EQueue.h>
 #include <concurrency/ThreadPool.h>
 #include <scaffold/Setting.h>
 
 #include <RPC/Service.h>
 
-using roo::log_api;
 
 namespace sisyphus {
 

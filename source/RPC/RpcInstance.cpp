@@ -5,10 +5,10 @@
  *
  */
 
+#include <other/Log.h>
+using roo::log_api;
 
 #include <RPC/RpcInstance.h>
-
-using roo::log_api;
 
 namespace sisyphus {
 

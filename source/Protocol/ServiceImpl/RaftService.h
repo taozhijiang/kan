@@ -1,5 +1,5 @@
-#ifndef __PROTOCOL_XTRA_TASK_SERVICE_H__
-#define __PROTOCOL_XTRA_TASK_SERVICE_H__
+#ifndef __PROTOCOL_RAFT_SERVICE_H__
+#define __PROTOCOL_RAFT_SERVICE_H__
 
 #include <xtra_rhel.h>
 
@@ -12,16 +12,16 @@
 
 namespace sisyphus {
 
-class XtraTaskService : public Service, 
+class RaftService : public Service,
                         public RpcServiceBase {
 
 public:
-    explicit XtraTaskService(const std::string& instance_name):
+    explicit RaftService(const std::string& instance_name):
         RpcServiceBase(instance_name),
         instance_name_(instance_name) {
     }
 
-    ~XtraTaskService() {}
+    ~RaftService() {}
 
     void handle_RPC(std::shared_ptr<RpcInstance> rpc_instance);
     std::string instance_name() {
@@ -56,8 +56,9 @@ private:
 private:
 
     ////////// RPC handlers //////////
-    void read_ops_impl(std::shared_ptr<RpcInstance> rpc_instance);
-    void write_ops_impl(std::shared_ptr<RpcInstance> rpc_instance);
+    void request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance);
+    void append_entries_impl(std::shared_ptr<RpcInstance> rpc_instance);
+    void install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instance);
 
     const std::string instance_name_;
 
@@ -65,4 +66,4 @@ private:
 
 } // namespace sisyphus
 
-#endif // __PROTOCOL_XTRA_TASK_SERVICE_H__
+#endif // __PROTOCOL_RAFT_SERVICE_H__

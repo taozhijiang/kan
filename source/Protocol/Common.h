@@ -13,7 +13,7 @@ namespace sisyphus {
 namespace ServiceID {
 
 enum {
-    XTRA_TASK_SERVICE = 1, // current demo service
+    RAFT_SERVICE = 1, // raft core service
 };
 
 }
