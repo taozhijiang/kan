@@ -33,6 +33,8 @@ bool RpcClientImpl::init() {
         log_err("create and initialized IoService failed.");
         return false;
     }
+
+    return true;
 }
 
 RpcClientImpl::~RpcClientImpl() {

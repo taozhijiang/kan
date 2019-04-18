@@ -13,7 +13,6 @@
 #include <map>
 #include <vector>
 
-
 namespace roo {
     class Setting;
     class Status;
@@ -23,6 +22,7 @@ namespace roo {
 namespace sisyphus {
 
 
+class RaftConsensus;
 class NetServer;
 
 class Captain {
@@ -55,6 +55,9 @@ public:
     std::shared_ptr<roo::Setting> setting_ptr_;
     std::shared_ptr<roo::Status> status_ptr_;
     std::shared_ptr<roo::Timer> timer_ptr_;
+
+
+    std::shared_ptr<RaftConsensus> raft_consensus_ptr_;
 };
 
 } // end namespace sisyphus

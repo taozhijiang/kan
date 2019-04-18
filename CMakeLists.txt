@@ -68,6 +68,7 @@ include_directories( ${INCLUDE_DIRS} )
 
 add_subdirectory( source/RPC )
 add_subdirectory( source/Protocol )
+add_subdirectory( source/Raft)
 add_subdirectory( source/Network )
 
 # Client
@@ -95,7 +96,7 @@ add_executable( sisyphus_service main.cpp setup.cpp build_version.cpp source/Cap
 
 # ld iconv ?
 
-set (EXTRA_LIBS Protocol RPC Network )
+set (EXTRA_LIBS Raft Protocol RPC Network )
 set (EXTRA_LIBS ${EXTRA_LIBS} Roo )
 
 set (EXTRA_LIBS ${EXTRA_LIBS} crypto ssl config++)
@@ -124,5 +125,4 @@ if(BUILD_DEBUG)
 
     enable_testing()
     add_subdirectory( test )
-    add_subdirectory( benchmark )
 endif(BUILD_DEBUG)

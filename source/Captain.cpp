@@ -25,6 +25,9 @@ using roo::log_api;
 #include <Protocol/Common.h>
 #include <Protocol/ServiceImpl/RaftService.h>
 
+
+#include <Raft/RaftConsensus.h>
+
 #include "Captain.h"
 
 
@@ -73,7 +76,7 @@ bool Captain::init(const std::string& cfgFile) {
         log_level = 7;
     }
 
-    roo::log_init(log_level);
+    roo::log_init(log_level, "", "./log", LOG_LOCAL6);
     log_notice("initialized log with level: %d", log_level);
 
     status_ptr_ = std::make_shared<roo::Status>();
@@ -100,6 +103,13 @@ bool Captain::init(const std::string& cfgFile) {
     // 再进行整体服务的初始化
     if (!Dispatcher::instance().init()) {
         log_err("Init Dispatcher failed.");
+        return false;
+    }
+
+
+    raft_consensus_ptr_ = std::make_shared<RaftConsensus>();
+    if (!raft_consensus_ptr_|| !raft_consensus_ptr_->init()) {
+        log_err("create RaftConsensus failed.");
         return false;
     }
 

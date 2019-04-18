@@ -9,9 +9,12 @@ define_colors()
 include_directories(         
     ${PROJECT_SOURCE_DIR}/include/
     ${PROJECT_SOURCE_DIR}/source/
+    ${PROJECT_SOURCE_DIR}/source/Client/include/
     ${PROJECT_SOURCE_DIR}/deps/
     ${PROJECT_SOURCE_DIR}/deps/xtra_rhelz.x/include/
     ${PROJECT_SOURCE_DIR}/deps/xtra_rhelz.x/include/google/ 
+
+    ${PROJECT_SOURCE_DIR}/deps/roo/
 )
 
 link_directories( /usr/lib64/mysql/
@@ -24,8 +27,9 @@ link_directories( /usr/lib64/mysql/
 
 
 
-set (TEST_HOST_LIB Scaffold Protocol RPC Network Utils Client )
+set (TEST_HOST_LIB Raft Protocol RPC Network Client )
 
+set (EXTRA_LIBS Roo glog_syslog )
 set (EXTRA_LIBS ${EXTRA_LIBS} ssl crypto config++)
 set (EXTRA_LIBS ${EXTRA_LIBS} rt pthread)
 set (EXTRA_LIBS ${EXTRA_LIBS} boost_system boost_thread boost_chrono boost_regex)
@@ -33,4 +37,7 @@ set (EXTRA_LIBS ${EXTRA_LIBS} protoc protobuf )
 
 
 set (EXTRA_LIBS ${EXTRA_LIBS} gtest gmock gtest_main)
+
+
+add_individual_test(RaftRpcSmoke)
 

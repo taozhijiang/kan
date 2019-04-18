@@ -8,6 +8,7 @@ using roo::log_api;
 #include <scaffold/Status.h>
 
 #include <Captain.h>
+#include <Raft/RaftConsensus.h>
 
 #include "RaftService.h"
 
@@ -190,53 +191,25 @@ void RaftService::request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance) {
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
-#if 0
-    Raft::XtraReadOps::Response response;
-    response.set_code(0);
-    response.set_msg("OK");
 
-    do {
+    Raft::RequestVoteOps::Request  request;
+    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
+        log_err("unmarshal request failed.");
+        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
+        return;
+    }
 
-        // 消息体的unmarshal
-        Raft::XtraReadOps::Request request;
-        if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
-            log_err("unmarshal request failed.");
-            response.set_code(-1);
-            response.set_msg("参数错误");
-            break;
-        }
-
-        // 相同类目下的子RPC分发
-        if (request.has_ping()) {
-            log_debug("Raft::XtraReadOps::ping -> %s", request.ping().msg().c_str());
-            response.mutable_ping()->set_msg("[[[pong]]]");
-            break;
-        } else if (request.has_gets()) {
-            log_debug("Raft::XtraReadOps::get -> %s", request.gets().key().c_str());
-            response.mutable_gets()->set_value("[[[pong]]]");
-            break;
-        } else if (request.has_echo()) {
-            std::string real_msg = request.echo().msg();
-            log_debug("Raft::XtraReadOps::echo -> %s", real_msg.c_str());
-            response.mutable_echo()->set_msg("echo:" + real_msg);
-        } else if (request.has_timeout()) {
-            int32_t timeout = request.timeout().timeout();
-            log_debug("this thread will sleep for %d sec.", timeout);
-            ::sleep(timeout);
-            response.mutable_timeout()->set_timeout("you should not see this.");
-        } else {
-            log_err("undetected specified service call.");
-            rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
-            return;
-        }
-
-    } while (0);
+    Raft::RequestVoteOps::Response response;
+    int ret = Captain::instance().raft_consensus_ptr_->do_handle_request_vote(request, response);
+    if (ret != 0) {
+        log_err("handle request_vote return %d", ret);
+        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+        return;
+    }
 
     std::string response_str;
     roo::ProtoBuf::marshalling_to_string(response, &response_str);
     rpc_instance->reply_rpc_message(response_str);
-
-#endif
 }
 
 void RaftService::append_entries_impl(std::shared_ptr<RpcInstance> rpc_instance) {
@@ -247,6 +220,25 @@ void RaftService::append_entries_impl(std::shared_ptr<RpcInstance> rpc_instance)
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
+
+    Raft::AppendEntriesOps::Request  request;
+    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
+        log_err("unmarshal request failed.");
+        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
+        return;
+    }
+
+    Raft::AppendEntriesOps::Response response;
+    int ret = Captain::instance().raft_consensus_ptr_->do_handle_append_entries(request, response);
+    if (ret != 0) {
+        log_err("handle append_entries return %d", ret);
+        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+        return;
+    }
+
+    std::string response_str;
+    roo::ProtoBuf::marshalling_to_string(response, &response_str);
+    rpc_instance->reply_rpc_message(response_str);
 }
 
 void RaftService::install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instance) {
@@ -258,6 +250,25 @@ void RaftService::install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instanc
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
+
+    Raft::InstallSnapshotOps::Request  request;
+    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
+        log_err("unmarshal request failed.");
+        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
+        return;
+    }
+
+    Raft::InstallSnapshotOps::Response response;
+    int ret = Captain::instance().raft_consensus_ptr_->do_handle_install_snapshot(request, response);
+    if (ret != 0) {
+        log_err("handle install_snapshot return %d", ret);
+        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+        return;
+    }
+
+    std::string response_str;
+    roo::ProtoBuf::marshalling_to_string(response, &response_str);
+    rpc_instance->reply_rpc_message(response_str);
 }
 
 
