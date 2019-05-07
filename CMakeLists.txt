@@ -104,6 +104,7 @@ set (EXTRA_LIBS ${EXTRA_LIBS} pthread)
 set (EXTRA_LIBS ${EXTRA_LIBS} boost_system boost_thread boost_chrono )
 set (EXTRA_LIBS ${EXTRA_LIBS} protoc protobuf )
 set (EXTRA_LIBS ${EXTRA_LIBS} glog_syslog )
+set (EXTRA_LIBS ${EXTRA_LIBS} leveldb snappy )
 
 
 

@@ -42,7 +42,7 @@ TEST_F(RaftRpcStub, RpcDispatchTest) {
     Raft::RequestVoteOps::Request  request {};
     Raft::RequestVoteOps::Response response {};
 
-    request.set_server_id(10801);
+    request.set_candidate_id(10801);
     request.set_term(1);
     request.set_last_log_term(1);
     request.set_last_log_index(1);

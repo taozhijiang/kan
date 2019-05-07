@@ -6,6 +6,8 @@
 #include <message/ProtoBuf.h>
 #include <Protocol/gen-cpp/Raft.pb.h>
 
+#include <Raft/LogIf.h>
+
 namespace sisyphus {
 
 class RaftConsensus {
@@ -33,6 +35,8 @@ public:
         Raft::InstallSnapshotOps::Response& response);
 
 
+private:
+    std::shared_ptr<LogIf> log_;
 };
 
 } // namespace sisyphus
