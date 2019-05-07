@@ -32,8 +32,8 @@ bool Executor::init() {
     }
 
     if (conf_.exec_thread_number_hard_ > conf_.exec_thread_number_ &&
-        conf_.exec_thread_step_size_ > 0) {
-
+        conf_.exec_thread_step_size_ > 0)
+    {
         log_debug("we will support thread adjust for %s, with param %d:%d",
                   instance_name().c_str(),
                   conf_.exec_thread_number_hard_, conf_.exec_thread_step_size_);

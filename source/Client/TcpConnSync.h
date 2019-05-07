@@ -5,8 +5,8 @@
  *
  */
 
-#ifndef __NETWORK_TCP_CONN_SYNC_H__
-#define __NETWORK_TCP_CONN_SYNC_H__
+#ifndef __CLIENT_TCP_CONN_SYNC_H__
+#define __CLIENT_TCP_CONN_SYNC_H__
 
 // 同步的TCP连接，主要用于客户端使用
 
