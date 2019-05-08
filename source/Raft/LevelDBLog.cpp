@@ -21,6 +21,7 @@ static const char* META_APPLY_INDEX  = "META_APPLY_INDEX";
 LevelDBLog::LevelDBLog(const std::string& path) :
     start_index_(1),
     last_index_(0),
+    log_mutex_(),
     log_meta_path_(path),
     log_meta_fp_() {
 
@@ -73,6 +74,8 @@ LevelDBLog::~LevelDBLog() {
 std::pair<uint64_t, uint64_t>
 LevelDBLog::append(const std::vector<EntryPtr>& newEntries) {
 
+    std::lock_guard<std::mutex> lock(log_mutex_);
+    
     leveldb::WriteBatch batch;
     for (size_t i = 0; i < newEntries.size(); ++i) {
         std::string buf;
@@ -104,7 +107,14 @@ LevelDBLog::EntryPtr LevelDBLog::get_entry(uint64_t index) const {
     return entry;
 }
 
+LevelDBLog::EntryPtr LevelDBLog::get_last_entry() const {
+    return get_entry(last_index_);
+}
+
+
 void LevelDBLog::truncate_prefix(uint64_t start_index) {
+
+    std::lock_guard<std::mutex> lock(log_mutex_);
 
     if (start_index <= start_index_)
         return;
@@ -123,6 +133,8 @@ void LevelDBLog::truncate_prefix(uint64_t start_index) {
 
 void LevelDBLog::truncate_suffix(uint64_t last_index) {
 
+    std::lock_guard<std::mutex> lock(log_mutex_);
+    
     if (last_index >= last_index_)
         return;
 

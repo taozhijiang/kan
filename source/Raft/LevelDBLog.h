@@ -2,6 +2,7 @@
 #define __RAFT_LEVELDB_LOG_H__
 
 #include <xtra_rhel.h>
+#include <mutex>
 #include <leveldb/db.h>
 
 #include <system/ConstructException.h>
@@ -20,6 +21,7 @@ public:
     append(const std::vector<EntryPtr>& newEntries)override;
 
     EntryPtr get_entry(uint64_t index) const override;
+    EntryPtr get_last_entry() const override;
 
     uint64_t start_index() const override {
         return start_index_;
@@ -41,6 +43,7 @@ protected:
     uint64_t start_index_;
     uint64_t last_index_;
 
+    std::mutex log_mutex_;
     const std::string log_meta_path_;
     std::unique_ptr<leveldb::DB> log_meta_fp_;
 };

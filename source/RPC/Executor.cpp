@@ -20,6 +20,8 @@
 
 namespace tzrpc {
 
+using sisyphus::Captain;
+
 bool Executor::init() {
 
     conf_ = service_impl_->get_executor_conf();
@@ -37,7 +39,7 @@ bool Executor::init() {
                       instance_name().c_str(),
                       conf_.exec_thread_number_hard_, conf_.exec_thread_step_size_);
 
-        if (!sisyphus::Captain::instance().timer_ptr_->add_timer(
+        if (!Captain::instance().timer_ptr_->add_timer(
                 std::bind(&Executor::executor_threads_adjust, shared_from_this(), std::placeholders::_1),
                 1 * 1000, true)) {
             roo::log_err("create thread adjust timer failed.");
@@ -45,7 +47,7 @@ bool Executor::init() {
         }
     }
 
-    sisyphus::Captain::instance().status_ptr_->attach_status_callback(
+    Captain::instance().status_ptr_->attach_status_callback(
         "executor_" + instance_name(),
         std::bind(&Executor::module_status, shared_from_this(),
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));

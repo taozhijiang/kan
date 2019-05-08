@@ -96,7 +96,7 @@ add_executable( sisyphus_service main.cpp setup.cpp build_version.cpp source/Cap
 
 # ld iconv ?
 
-set (EXTRA_LIBS Raft Protocol RPC Network )
+set (EXTRA_LIBS Raft Protocol RPC Network Client )
 set (EXTRA_LIBS ${EXTRA_LIBS} Roo )
 
 set (EXTRA_LIBS ${EXTRA_LIBS} crypto ssl config++)

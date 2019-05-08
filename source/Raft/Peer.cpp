@@ -3,6 +3,8 @@
 
 namespace sisyphus {
 
+using tzrpc_client::RpcClientStatus;
+
 Peer::Peer(uint64_t id,
            const std::string& addr, uint16_t port, const rpc_handler_t& handler) :
     id_(id),
@@ -21,8 +23,8 @@ Peer::~Peer() {
 
 
 int Peer::send_rpc(uint16_t service_id, uint16_t opcode, const std::string& req) {
-
-    return 0;
+    RpcClientStatus status = rpc_client_->call_RPC(service_id, opcode, req);
+    return status == RpcClientStatus::OK ? 0 : -1;
 }
 
 
