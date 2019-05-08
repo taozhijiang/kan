@@ -15,7 +15,7 @@
 #include <mutex>
 
 
-namespace sisyphus {
+namespace tzrpc {
 
 class RpcInstance;
 class Service;
@@ -39,9 +39,9 @@ public:
 
 private:
 
-    Dispatcher():
+    Dispatcher() :
         initialized_(false),
-        services_({}) {
+        services_({ }) {
     }
 
     ~Dispatcher() {
@@ -60,7 +60,7 @@ private:
 
 };
 
-} // end namespace sisyphus
+} // end namespace tzrpc
 
 
 #endif // __RPC_SERVICE_DISPATCHER_H__

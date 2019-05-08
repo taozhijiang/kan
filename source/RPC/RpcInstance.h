@@ -16,11 +16,11 @@
 #include <RPC/RpcRequestMessage.h>
 #include <RPC/RpcResponseMessage.h>
 
-namespace sisyphus {
+namespace tzrpc {
 
 class RpcInstance {
 public:
-    RpcInstance(const std::string& str_request, std::shared_ptr<TcpConnAsync> socket, int msg_size):
+    RpcInstance(const std::string& str_request, std::shared_ptr<TcpConnAsync> socket, int msg_size) :
         start_(::time(NULL)),
         full_socket_(socket),
         request_(str_request),
@@ -71,7 +71,7 @@ private:
     uint16_t opcode_;
 };
 
-} // end namespace sisyphus
+} // end namespace tzrpc
 
 
 #endif // __RPC_INSTANCE_H__

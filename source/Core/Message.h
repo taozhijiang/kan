@@ -15,7 +15,7 @@
 #include <string>
 
 
-namespace sisyphus {
+namespace tzrpc {
 
 const static uint16_t kHeaderMagic      = 0x746b;
 const static uint16_t kHeaderVersion    = 0x01;
@@ -89,6 +89,6 @@ struct Message {
 };
 
 
-} // end namespace sisyphus
+} // end namespace tzrpc
 
 #endif // __CORE_MESSAGE_H__

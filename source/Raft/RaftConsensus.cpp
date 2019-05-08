@@ -11,10 +11,17 @@ namespace sisyphus {
 
 bool RaftConsensus::init() {
 
-    log_ = std::make_shared<LevelDBLog>("./log_meta");
+    log_meta_ = std::make_shared<LevelDBLog>("./log_meta");
 
     return true;
 }
+
+
+int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_id, uint16_t opcode, const std::string& rsp) {
+    return 0;
+}
+
+
 
 int RaftConsensus::do_handle_request_vote(
     const Raft::RequestVoteOps::Request& request,

@@ -8,7 +8,7 @@
 #ifndef __PROTOCOL_COMMON_H__
 #define __PROTOCOL_COMMON_H__
 
-namespace sisyphus {
+namespace tzrpc {
 
 namespace ServiceID {
 

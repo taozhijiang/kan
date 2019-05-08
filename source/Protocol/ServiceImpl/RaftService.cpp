@@ -1,5 +1,4 @@
 #include <other/Log.h>
-using roo::log_api;
 
 #include <message/ProtoBuf.h>
 #include <Protocol/gen-cpp/Raft.pb.h>
@@ -12,13 +11,16 @@ using roo::log_api;
 
 #include "RaftService.h"
 
-namespace sisyphus {
+namespace tzrpc {
+
+using sisyphus::Captain;
+
 
 bool RaftService::init() {
 
     auto setting_ptr = Captain::instance().setting_ptr_->get_setting();
     if(!setting_ptr) {
-        log_err("Setting not initialized? return setting_ptr empty!!!");
+        roo::log_err("Setting not initialized? return setting_ptr empty!!!");
         return false;
     }
 
@@ -36,34 +38,34 @@ bool RaftService::init() {
             std::string instance_name;
             service.lookupValue("instance_name", instance_name);
             if (instance_name.empty()) {
-                log_err("check service conf, required instance_name not found, skip this one.");
+                roo::log_err("check service conf, required instance_name not found, skip this one.");
                 continue;
             }
 
-            log_debug("detected instance_name: %s", instance_name.c_str());
+            roo::log_debug("detected instance_name: %s", instance_name.c_str());
 
             // 发现是匹配的，则找到对应虚拟主机的配置文件了
             if (instance_name == instance_name_) {
                 if (!handle_rpc_service_conf(service)) {
-                    log_err("handle detail conf for instnace %s failed.", instance_name.c_str());
+                    roo::log_err("handle detail conf for instnace %s failed.", instance_name.c_str());
                     return false;
                 }
 
                 // OK, we will return
-                log_debug("handle detail conf for instance %s success!", instance_name.c_str());
+                roo::log_debug("handle detail conf for instance %s success!", instance_name.c_str());
                 init_success = true;
                 break;
             }
         }
 
     } catch (const libconfig::SettingNotFoundException &nfex) {
-        log_err("rpc.services not found!");
+        roo::log_err("rpc.services not found!");
     } catch (std::exception& e) {
-        log_err("execptions catched for %s",  e.what());
+        roo::log_err("execptions catched for %s",  e.what());
     }
 
     if(!init_success) {
-        log_err("instance %s init failed, may not configure for it?", instance_name_.c_str());
+        roo::log_err("instance %s init failed, may not configure for it?", instance_name_.c_str());
     }
 
     return init_success;
@@ -77,14 +79,14 @@ bool RaftService::handle_rpc_service_conf(const libconfig::Setting& setting) {
     if (!conf_ptr_) {
         conf_ptr_.reset(new ServiceConf());
         if (!conf_ptr_) {
-            log_err("create ServiceConf instance failed.");
+            roo::log_err("create ServiceConf instance failed.");
             return false;
         }
     }
 
     ExecutorConf conf;
     if (RpcServiceBase::handle_rpc_service_conf(setting, conf) != 0) {
-        log_err("Handler ExecutorConf failed.");
+        roo::log_err("Handler ExecutorConf failed.");
         return -1;
     }
 
@@ -117,18 +119,18 @@ int RaftService::module_runtime(const libconfig::Config& conf) {
 
             // 发现是匹配的，则找到对应虚拟主机的配置文件了
             if (instance_name == instance_name_) {
-                log_notice("about to handle_rpc_service_runtime_conf update for %s", instance_name_.c_str());
+                roo::log_notice("about to handle_rpc_service_runtime_conf update for %s", instance_name_.c_str());
                 return handle_rpc_service_runtime_conf(service);
             }
         }
 
     } catch (const libconfig::SettingNotFoundException &nfex) {
-        log_err("rpc_services not found!");
+        roo::log_err("rpc_services not found!");
     } catch (std::exception& e) {
-        log_err("execptions catched for %s",  e.what());
+        roo::log_err("execptions catched for %s",  e.what());
     }
 
-    log_err("conf for instance %s not found!!!!", instance_name_.c_str());
+    roo::log_err("conf for instance %s not found!!!!", instance_name_.c_str());
     return -1;
 }
 
@@ -137,7 +139,7 @@ bool RaftService::handle_rpc_service_runtime_conf(const libconfig::Setting& sett
 
     ExecutorConf conf;
     if (RpcServiceBase::handle_rpc_service_conf(setting, conf) != 0) {
-        log_err("Handler ExecutorConf failed.");
+        roo::log_err("Handler ExecutorConf failed.");
         return -1;
     }
 
@@ -160,7 +162,7 @@ int RaftService::module_status(std::string& module, std::string& name, std::stri
 
 void RaftService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    using Raft::OpCode;
+    using sisyphus::Raft::OpCode;
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc_instance->get_opcode()) {
@@ -175,7 +177,7 @@ void RaftService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
             break;
 
         default:
-            log_err("Received RPC request with unknown opcode %u: "
+            roo::log_err("Received RPC request with unknown opcode %u: "
                     "rejecting it as invalid request",
                     rpc_instance->get_opcode());
             rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
@@ -186,23 +188,23 @@ void RaftService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 void RaftService::request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != Raft::OpCode::kRequestVote) {
-        log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
+    if (rpc_request_message.header_.opcode != sisyphus::Raft::OpCode::kRequestVote) {
+        roo::log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    Raft::RequestVoteOps::Request  request;
+    sisyphus::Raft::RequestVoteOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
-        log_err("unmarshal request failed.");
+        roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    Raft::RequestVoteOps::Response response;
+    sisyphus::Raft::RequestVoteOps::Response response;
     int ret = Captain::instance().raft_consensus_ptr_->do_handle_request_vote(request, response);
     if (ret != 0) {
-        log_err("handle request_vote return %d", ret);
+        roo::log_err("handle request_vote return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
         return;
     }
@@ -215,23 +217,23 @@ void RaftService::request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 void RaftService::append_entries_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != Raft::OpCode::kAppendEntries) {
-        log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
+    if (rpc_request_message.header_.opcode != sisyphus::Raft::OpCode::kAppendEntries) {
+        roo::log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    Raft::AppendEntriesOps::Request  request;
+    sisyphus::Raft::AppendEntriesOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
-        log_err("unmarshal request failed.");
+        roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    Raft::AppendEntriesOps::Response response;
+    sisyphus::Raft::AppendEntriesOps::Response response;
     int ret = Captain::instance().raft_consensus_ptr_->do_handle_append_entries(request, response);
     if (ret != 0) {
-        log_err("handle append_entries return %d", ret);
+        roo::log_err("handle append_entries return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
         return;
     }
@@ -245,23 +247,23 @@ void RaftService::install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instanc
 
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != Raft::OpCode::kInstallSnapshot) {
-        log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
+    if (rpc_request_message.header_.opcode != sisyphus::Raft::OpCode::kInstallSnapshot) {
+        roo::log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    Raft::InstallSnapshotOps::Request  request;
+    sisyphus::Raft::InstallSnapshotOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
-        log_err("unmarshal request failed.");
+        roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    Raft::InstallSnapshotOps::Response response;
+    sisyphus::Raft::InstallSnapshotOps::Response response;
     int ret = Captain::instance().raft_consensus_ptr_->do_handle_install_snapshot(request, response);
     if (ret != 0) {
-        log_err("handle install_snapshot return %d", ret);
+        roo::log_err("handle install_snapshot return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
         return;
     }

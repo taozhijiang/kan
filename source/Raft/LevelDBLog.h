@@ -16,9 +16,9 @@ public:
     explicit LevelDBLog(const std::string& path);
     virtual ~LevelDBLog();
 
-    std::pair<uint64_t, uint64_t> 
-    append(const std::vector<EntryPtr>& newEntries) override;
-    
+    std::pair<uint64_t, uint64_t>
+    append(const std::vector<EntryPtr>& newEntries)override;
+
     EntryPtr get_entry(uint64_t index) const override;
 
     uint64_t start_index() const override {
@@ -29,8 +29,8 @@ public:
         return last_index_;
     }
 
-    void truncate_prefix(uint64_t start_index) override ;
-    void truncate_suffix(uint64_t last_index) override;
+    void truncate_prefix(uint64_t start_index)override;
+    void truncate_suffix(uint64_t last_index)override;
 
     int update_meta_data(const LogMeta& meta) const override;
     int read_meta_data(LogMeta* meta_data) const override;

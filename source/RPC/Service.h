@@ -15,7 +15,7 @@
 
 // real rpc should implement this interface class
 
-namespace sisyphus {
+namespace tzrpc {
 
 class RpcInstance;
 
@@ -52,6 +52,6 @@ public:
 
 };
 
-} // end namespace sisyphus
+} // end namespace tzrpc
 
 #endif // __RPC_SERVICE_H__

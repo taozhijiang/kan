@@ -15,7 +15,8 @@
 #include <boost/asio.hpp>
 
 #include <mutex>
-namespace sisyphus {
+
+namespace tzrpc {
 
 enum class ConnStat : uint8_t {
     kWorking = 1,
@@ -159,16 +160,18 @@ struct IOBound {
 };
 
 
-enum class SendStatus:  uint8_t {
+enum class SendStatus :  uint8_t {
     kSend       = 1,
     kDone       = 2,
 };
 
-enum class RecvStatus: uint8_t {
+enum class RecvStatus : uint8_t {
     kRecvHead   = 1,
     kRecvBody   = 2,
     kDone       = 3,
 };
-} // end namespace sisyphus
+
+
+} // end namespace tzrpc
 
 #endif // __NETWORK_NET_CONN_H__

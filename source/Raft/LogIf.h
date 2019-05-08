@@ -25,7 +25,7 @@ public:
     LogIf() = default;
     virtual ~LogIf() = default;
 
-    virtual std::pair<uint64_t, uint64_t> 
+    virtual std::pair<uint64_t, uint64_t>
     append(const std::vector<EntryPtr>& newEntries) = 0;
 
     virtual EntryPtr get_entry(uint64_t index) const = 0;

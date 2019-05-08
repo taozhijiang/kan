@@ -7,6 +7,7 @@
 #include <boost/format.hpp>
 #include <linux/limits.h>
 
+#include <version.h>
 #include <other/Log.h>
 
 #include <Captain.h>
@@ -22,20 +23,20 @@ int create_process_pid();
 
 
 static void interrupted_callback(int signal){
-    roo::log_alert("Signal %d received ...", signal);
+    roo::log_warning("Signal %d received ...", signal);
     switch(signal) {
         case SIGHUP:
-            roo::log_notice("SIGHUP recv, do update_run_conf... ");
+            roo::log_warning("SIGHUP recv, do update_run_conf... ");
             sisyphus::Captain::instance().setting_ptr_->update_runtime_setting();
             break;
 
         case SIGUSR1:
-            roo::log_notice("SIGUSR recv, do module_status ... ");
+            roo::log_warning("SIGUSR recv, do module_status ... ");
             {
                 std::string output;
                 sisyphus::Captain::instance().status_ptr_->collect_status(output);
                 std::cout << output << std::endl;
-                roo::log_notice("%s", output.c_str());
+                roo::log_warning("%s", output.c_str());
             }
             break;
 
@@ -58,7 +59,11 @@ extern char * program_invocation_short_name;
 void usage() {
     std::stringstream ss;
 
-    ss << program_invocation_short_name << ":" << std::endl;
+    ss << std::endl;
+    ss << " * THIS RELEASE OF " << program_invocation_short_name
+       << ": ver " << PROGRAM_VERSION << " * " << std::endl;
+
+    ss << std::endl;
     ss << "\t -c cfgFile  specify config file, default " << program_invocation_short_name << ".conf. " << std::endl;
     ss << "\t -d          daemonize service." << std::endl;
     ss << "\t -v          print version info." << std::endl;
@@ -69,7 +74,9 @@ void usage() {
 
 void show_vcs_info () {
 
-    std::cout << " THIS RELEASE OF " << program_invocation_short_name << std::endl;
+    std::cout << std::endl;
+    std::cout << " * THIS RELEASE OF " << program_invocation_short_name
+              << ": ver " << PROGRAM_VERSION << " * " << std::endl;
 
     extern const char *build_commit_version;
     extern const char *build_commit_branch;
@@ -77,11 +84,12 @@ void show_vcs_info () {
     extern const char *build_commit_author;
     extern const char *build_time;
 
-    std::cout << build_commit_version << std::endl;
-    std::cout << build_commit_branch << std::endl;
-    std::cout << build_commit_date << std::endl;
-    std::cout << build_commit_author << std::endl;
-    std::cout << build_time << std::endl;
+    std::cout << std::endl;
+    std::cout << "    " << build_commit_version << std::endl;
+    std::cout << "    " << build_commit_branch << std::endl;
+    std::cout << "    " << build_commit_date << std::endl;
+    std::cout << "    " << build_commit_author << std::endl;
+    std::cout << "    " << build_time << std::endl;
 
     return;
 }

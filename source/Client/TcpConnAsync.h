@@ -14,19 +14,19 @@
 #include <Network/NetConn.h>
 #include <other/Log.h>
 
-namespace sisyphus_client {
+namespace tzrpc_client {
 
-using sisyphus::Message;
-using sisyphus::NetConn;
-using sisyphus::IOBound;
-using sisyphus::ConnStat;
+using tzrpc::Message;
+using tzrpc::NetConn;
+using tzrpc::IOBound;
+using tzrpc::ConnStat;
 
-using sisyphus::SendStatus;
-using sisyphus::RecvStatus;
+using tzrpc::SendStatus;
+using tzrpc::RecvStatus;
 
 class RpcClientSetting;
 
-typedef std::function<void(const sisyphus::Message& net_message)> rpc_wrapper_t;
+typedef std::function<void(const tzrpc::Message& net_message)> rpc_wrapper_t;
 
 class TcpConnAsync : public NetConn,
     public std::enable_shared_from_this<TcpConnAsync> {
@@ -51,8 +51,8 @@ public:
 
         if (client_setting_.send_max_msg_size_ != 0 &&
             msg.header_.length > client_setting_.send_max_msg_size_) {
-            log_err("send_max_msg_size %d, but we recv %d",
-                    static_cast<int>(client_setting_.send_max_msg_size_), static_cast<int>(msg.header_.length));
+            roo::log_err("send_max_msg_size %d, but we recv %d",
+                         static_cast<int>(client_setting_.send_max_msg_size_), static_cast<int>(msg.header_.length));
             return false;
         }
 
@@ -75,7 +75,7 @@ public:
     // between shutdown and close on a socket is the behavior when the socket is shared by other processes.
     // A shutdown() affects all copies of the socket while close() affects only the file descriptor in one process.
     void shutdown_and_close_socket() {
-        sock_shutdown_and_close(sisyphus::ShutdownType::kBoth);
+        sock_shutdown_and_close(tzrpc::ShutdownType::kBoth);
     }
 
 private:
@@ -120,6 +120,6 @@ private:
 };
 
 
-} // end namespace sisyphus_client
+} // end namespace tzrpc_client
 
 #endif // __CLIENT_TCP_CONN_ASYNC_H__

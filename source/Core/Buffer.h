@@ -16,7 +16,7 @@
 
 #include <Core/Message.h>
 
-namespace sisyphus {
+namespace tzrpc {
 
 class Buffer {
 
@@ -136,6 +136,6 @@ private:
     std::vector<char> data_;
 };
 
-} // end namespace sisyphus
+} // end namespace tzrpc
 
 #endif // __CORE_BUFFER_H__

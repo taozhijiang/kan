@@ -10,7 +10,7 @@
 
 #include "RpcServiceBase.h"
 
-namespace sisyphus {
+namespace tzrpc {
 
 class RaftService : public Service,
                         public RpcServiceBase {

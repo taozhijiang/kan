@@ -12,14 +12,12 @@
 using boost::asio::steady_timer;
 
 #include <other/Log.h>
-using roo::log_api;
 
 #include <concurrency/IoService.h>
-
 #include <Client/include/RpcClientStatus.h>
 #include <Client/include/RpcClient.h>
 
-namespace sisyphus {
+namespace tzrpc {
 
 class RpcRequestMessage;
 class RpcResponseMessage;
@@ -27,7 +25,7 @@ class Message;
 
 }
 
-namespace sisyphus_client {
+namespace tzrpc_client {
 
 class TcpConnSync;
 class TcpConnAsync;
@@ -38,11 +36,11 @@ class TcpConnAsync;
 //
 //////////////////////////
 
-typedef std::function<void(const sisyphus::Message& net_message)> rpc_wrapper_t;
+typedef std::function<void(const tzrpc::Message& net_message)> rpc_wrapper_t;
 
-class RpcClientImpl: public std::enable_shared_from_this<RpcClientImpl> {
+class RpcClientImpl : public std::enable_shared_from_this<RpcClientImpl> {
 public:
-    RpcClientImpl(const RpcClientSetting& client_setting):
+    RpcClientImpl(const RpcClientSetting& client_setting) :
         client_setting_(client_setting),
         io_service_(),
         call_mutex_(),
@@ -78,8 +76,8 @@ private:
     // 确保不会客户端多线程调用，导致底层的连接串话
     std::mutex call_mutex_;
 
-    bool send_rpc_message(const sisyphus::RpcRequestMessage& rpc_request_message);
-    bool recv_rpc_message(sisyphus::Message& net_message);
+    bool send_rpc_message(const tzrpc::RpcRequestMessage& rpc_request_message);
+    bool recv_rpc_message(tzrpc::Message& net_message);
 
     //
     // rpc调用超时相关的配置
@@ -95,16 +93,16 @@ private:
 
     // 异步处理的连接
 
-    bool send_rpc_message_async(const sisyphus::RpcRequestMessage& rpc_request_message);
+    bool send_rpc_message_async(const tzrpc::RpcRequestMessage& rpc_request_message);
 
     // 这里进行一些RPC数据包的解析操作，业务层不做包细节的处理
-    void async_recv_wrapper(const sisyphus::Message& net_message);
+    void async_recv_wrapper(const tzrpc::Message& net_message);
     std::shared_ptr<TcpConnAsync> conn_async_;
     rpc_handler_t handler_;
 };
 
 
-} // end namespace sisyphus_client
+} // end namespace tzrpc_client
 
 
 #endif // __RPC_CLIENT_IMPL_H__

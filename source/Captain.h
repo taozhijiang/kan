@@ -19,11 +19,14 @@ namespace roo {
     class Timer;
 }
 
+namespace tzrpc {
+    class NetServer;
+}
+
 namespace sisyphus {
 
 
 class RaftConsensus;
-class NetServer;
 
 class Captain {
 public:
@@ -50,7 +53,7 @@ private:
 
 public:
 
-    std::shared_ptr<NetServer> net_server_ptr_;
+    std::shared_ptr<tzrpc::NetServer> net_server_ptr_;
     
     std::shared_ptr<roo::Setting> setting_ptr_;
     std::shared_ptr<roo::Status> status_ptr_;

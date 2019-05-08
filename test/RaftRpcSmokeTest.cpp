@@ -13,7 +13,7 @@ using namespace ::testing;
 #include <roo/message/ProtoBuf.h>
 
 using namespace sisyphus;
-using namespace sisyphus_client;
+using namespace tzrpc_client;
 
 class RaftRpcStub : public ::testing::Test {
 
@@ -51,7 +51,7 @@ TEST_F(RaftRpcStub, RpcDispatchTest) {
     std::string to;
 
     ASSERT_THAT(roo::ProtoBuf::marshalling_to_string(request, &from), Eq(true));
-    RpcClientStatus code = client_.call_RPC(ServiceID::RAFT_SERVICE, Raft::OpCode::kRequestVote,
+    RpcClientStatus code = client_.call_RPC(tzrpc::ServiceID::RAFT_SERVICE, Raft::OpCode::kRequestVote,
                                  from, to);
 
     ASSERT_THAT(code, Eq(RpcClientStatus::OK));
