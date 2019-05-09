@@ -22,7 +22,7 @@ Peer::~Peer() {
 }
 
 
-int Peer::send_rpc(uint16_t service_id, uint16_t opcode, const std::string& req) {
+int Peer::send_rpc(uint16_t service_id, uint16_t opcode, const std::string& req) const {
     RpcClientStatus status = rpc_client_->call_RPC(service_id, opcode, req);
     return status == RpcClientStatus::OK ? 0 : -1;
 }

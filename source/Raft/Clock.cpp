@@ -17,7 +17,8 @@ volatile uint64_t Clock::current_ = 0;
 
 
 void Clock::step(const boost::system::error_code& ec) {
-    ++ current_;
+
+    ++current_;
 
     // TODO, ugly
     Captain::instance().raft_consensus_ptr_->main_notify_.notify_all();

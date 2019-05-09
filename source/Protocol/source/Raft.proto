@@ -19,7 +19,7 @@ message Entry {
     required EntryType type = 1;
 
     required uint64 term    = 2; // the entry was created
-    optional uint64 index   = 3; // internal for log store
+    optional uint64 index   = 3; // internal for log store, 对于心跳Entry该值为空
 
     optional bytes data     = 4;
     optional bytes context  = 5;
@@ -53,7 +53,7 @@ message AppendEntriesOps {
         required uint64 prev_log_term   = 4;
 
         repeated Entry  entries         = 5;
-        required uint64 leade_commit    = 6; // leade's commit index
+        required uint64 leader_commit   = 6; // leade's commit index
     }
 
     message Response {
@@ -61,7 +61,7 @@ message AppendEntriesOps {
         required bool   success         = 2; // true if fellower contained entry match prev_log_index/term
         required uint64 peer_id         = 3; // 因为是异步应答的，所以需要带上应答者ID
 
-        optional uint64 last_log_index  = 5;
+        required uint64 last_log_index  = 5; // 返回Peer的last_log_index
     }
 }
 

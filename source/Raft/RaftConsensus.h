@@ -12,11 +12,12 @@
 #include <Raft/LogIf.h>
 #include <Raft/Context.h>
 #include <Raft/Option.h>
+#include <Raft/Clock.h>
 
 #include <Client/include/RpcClientStatus.h>
 
 namespace tzrpc {
-    class RaftService;
+class RaftService;
 }
 
 namespace sisyphus {
@@ -38,16 +39,17 @@ public:
 
     typedef sisyphus::Raft::OpCode  OpCode;
 
-    RaftConsensus():
-        peer_map_(),
+    RaftConsensus() :
+        consensus_mutex_(),
+        peer_set_(),
         log_meta_(),
         option_(),
-        context_(), 
+        context_(),
         main_thread_stop_(false) {
     }
 
     ~RaftConsensus() {
-        if(main_thread_.joinable())
+        if (main_thread_.joinable())
             main_thread_.join();
     }
 
@@ -70,14 +72,22 @@ private:
 
     int send_request_vote();
     int send_append_entries();
+    int send_append_entries(const Peer& peer);
     int send_install_snapshot();
 
     void main_thread_run();
 
 private:
 
+    // 实例的全局互斥保护
+    std::mutex consensus_mutex_;
+
+    // Timer
+    SimpleTimer heartbeat_timer_;
+    SimpleTimer election_timer_;
+
     // current static conf, not protected
-    std::map<uint64_t, std::shared_ptr<Peer>> peer_map_;
+    std::map<uint64_t, std::shared_ptr<Peer>> peer_set_;
 
     // Raft log & meta store
     std::unique_ptr<LogIf> log_meta_;

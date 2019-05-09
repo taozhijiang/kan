@@ -3,7 +3,6 @@
 
 #include <xtra_rhel.h>
 
-
 namespace sisyphus {
 
 enum class Role : uint8_t {
@@ -11,6 +10,10 @@ enum class Role : uint8_t {
     kCandidate = 2,
     kLeader = 3,
 };
+
+static inline std::string RoleStr(enum Role role) {
+    return (role == Role::kLeader ? "Leader" : role == Role::kFollower ? "Follower" : "Candidate");
+}
 
 class Context {
 
@@ -27,14 +30,15 @@ public:
     uint64_t id() const { return id_; }
     uint64_t quorum_count() const { return quorum_granted_.size(); }
     Role role() const { return role_; }
-    uint64_t latest_oper_tick() const { return latest_oper_tick_; }
 
-    void incr_term() { ++ term_; }
+    void incr_term() { ++term_; }
 
     // 角色切换
     void become_follower(uint64_t term, uint64_t leader);
     void become_candidate();
     void become_leader();
+
+    std::string str() const;
 
 private:
 
@@ -45,14 +49,15 @@ private:
     uint64_t voted_for_;
 
     // 记录获得选票的peer
-    std::set<uint64_t> quorum_granted_; 
+    std::set<uint64_t> quorum_granted_;
 
     enum Role role_;
 
-    // 最新的操作时间，用来比较选取超时、发送心跳等
-    uint64_t latest_oper_tick_;
+    uint64_t commit_index_;
+    uint64_t applied_index_;
 };
 
 } // namespace sisyphus
 
 #endif // __RAFT_CONTEXT_H__
+

@@ -21,6 +21,7 @@ public:
     append(const std::vector<EntryPtr>& newEntries)override;
 
     EntryPtr get_entry(uint64_t index) const override;
+    bool get_entries(uint64_t start, std::vector<EntryPtr>& entries) const override;
     EntryPtr get_last_entry() const override;
 
     uint64_t start_index() const override {

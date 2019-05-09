@@ -29,6 +29,7 @@ public:
     append(const std::vector<EntryPtr>& newEntries) = 0;
 
     virtual EntryPtr get_entry(uint64_t index) const = 0;
+    virtual bool get_entries(uint64_t start, std::vector<EntryPtr>& entries) const = 0;
     virtual EntryPtr get_last_entry() const = 0;
 
     virtual uint64_t start_index() const = 0;

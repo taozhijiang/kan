@@ -75,7 +75,7 @@ std::pair<uint64_t, uint64_t>
 LevelDBLog::append(const std::vector<EntryPtr>& newEntries) {
 
     std::lock_guard<std::mutex> lock(log_mutex_);
-    
+
     leveldb::WriteBatch batch;
     for (size_t i = 0; i < newEntries.size(); ++i) {
         std::string buf;
@@ -107,6 +107,33 @@ LevelDBLog::EntryPtr LevelDBLog::get_entry(uint64_t index) const {
     return entry;
 }
 
+bool LevelDBLog::get_entries(uint64_t start, std::vector<EntryPtr>& entries) const {
+
+    // TODO install log
+    if (start < start_index_)
+        start = start_index_;
+
+    if (start > last_index_) {
+        roo::log_err("get_entries with start > last_index_!");
+        return false;
+    }
+
+    for (; start <= last_index_; ++start) {
+        std::string val;
+        leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), Endian::uint64_to_net(start), &val);
+        if (!status.ok()) {
+            roo::log_err("read %lu failed.", start);
+            return false;
+        }
+
+        EntryPtr entry = std::make_shared<Entry>();
+        entry->ParseFromString(val);
+        entries.emplace_back(entry);
+    }
+
+    return true;
+}
+
 LevelDBLog::EntryPtr LevelDBLog::get_last_entry() const {
     return get_entry(last_index_);
 }
@@ -134,7 +161,7 @@ void LevelDBLog::truncate_prefix(uint64_t start_index) {
 void LevelDBLog::truncate_suffix(uint64_t last_index) {
 
     std::lock_guard<std::mutex> lock(log_mutex_);
-    
+
     if (last_index >= last_index_)
         return;
 
@@ -157,8 +184,11 @@ int LevelDBLog::update_meta_data(const LogMeta& meta) const {
     leveldb::WriteBatch batch;
     batch.Put(META_CURRENT_TERM, Endian::uint64_to_net(meta.current_term()));
     batch.Put(META_VOTE_FOR,     Endian::uint64_to_net(meta.voted_for()));
-    batch.Put(META_COMMIT_INDEX, Endian::uint64_to_net(meta.commit_index()));
-    batch.Put(META_APPLY_INDEX,  Endian::uint64_to_net(meta.apply_index()));
+
+    if (meta.commit_index())
+        batch.Put(META_COMMIT_INDEX, Endian::uint64_to_net(meta.commit_index()));
+    if (meta.apply_index())
+        batch.Put(META_APPLY_INDEX,  Endian::uint64_to_net(meta.apply_index()));
 
     leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
     if (!status.ok()) {
