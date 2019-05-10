@@ -34,6 +34,13 @@ public:
         return false;
     }
 
+    bool within(uint64_t timeout) const {
+        if (enable_)
+            return start_tick_ + timeout > Clock::current();
+
+        return false;
+    }
+
     void schedule() {
         enable_ = true;
         start_tick_ = Clock::current();

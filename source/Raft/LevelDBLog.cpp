@@ -13,7 +13,7 @@ namespace sisyphus {
 using roo::Endian;
 
 static const char* META_CURRENT_TERM = "META_CURRENT_TERM";
-static const char* META_VOTE_FOR     = "META_VOTE_FOR";
+static const char* META_VOTED_FOR    = "META_VOTED_FOR";
 static const char* META_COMMIT_INDEX = "META_COMMIT_INDEX";
 static const char* META_APPLY_INDEX  = "META_APPLY_INDEX";
 
@@ -53,7 +53,8 @@ LevelDBLog::LevelDBLog(const std::string& path) :
     while (it->Valid()) {
 
         std::string key = it->key().ToString();
-        if (key.find("META_") == std::string::npos) {
+        // 元数据，这边跳过
+        if (key.find("META_") != std::string::npos) {
             it->Prev();
             continue;
         }
@@ -63,7 +64,7 @@ LevelDBLog::LevelDBLog(const std::string& path) :
         break;
     }
 
-    if (last_index_ != 0 && last_index_ > start_index_)
+    if (last_index_ != 0 && last_index_ < start_index_)
         throw roo::ConstructException("Invalid start_index_ and last_index_ detect.");
 }
 
@@ -93,7 +94,7 @@ LevelDBLog::append(const std::vector<EntryPtr>& newEntries) {
     return{ start_index_, last_index_ };
 }
 
-LevelDBLog::EntryPtr LevelDBLog::get_entry(uint64_t index) const {
+LevelDBLog::EntryPtr LevelDBLog::entry(uint64_t index) const {
 
     std::string val;
     leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), Endian::uint64_to_net(index), &val);
@@ -107,15 +108,16 @@ LevelDBLog::EntryPtr LevelDBLog::get_entry(uint64_t index) const {
     return entry;
 }
 
-bool LevelDBLog::get_entries(uint64_t start, std::vector<EntryPtr>& entries) const {
+bool LevelDBLog::entries(uint64_t start, std::vector<EntryPtr>& entries) const {
 
-    // TODO install log
+    std::lock_guard<std::mutex> lock(log_mutex_);
+
     if (start < start_index_)
         start = start_index_;
 
+    // 在peer和leader日志一致的时候，就会是这种情况
     if (start > last_index_) {
-        roo::log_err("get_entries with start > last_index_!");
-        return false;
+        return true;
     }
 
     for (; start <= last_index_; ++start) {
@@ -134,10 +136,17 @@ bool LevelDBLog::get_entries(uint64_t start, std::vector<EntryPtr>& entries) con
     return true;
 }
 
-LevelDBLog::EntryPtr LevelDBLog::get_last_entry() const {
-    return get_entry(last_index_);
-}
+std::pair<uint64_t, uint64_t>
+LevelDBLog::last_term_and_index() const {
 
+    std::lock_guard<std::mutex> lock(log_mutex_);
+
+    auto item = entry(last_index_);
+    if (item)
+        return{ item->term(), last_index_ };
+
+    return{ 0, last_index_ };
+}
 
 void LevelDBLog::truncate_prefix(uint64_t start_index) {
 
@@ -182,12 +191,12 @@ void LevelDBLog::truncate_suffix(uint64_t last_index) {
 int LevelDBLog::update_meta_data(const LogMeta& meta) const {
 
     leveldb::WriteBatch batch;
-    batch.Put(META_CURRENT_TERM, Endian::uint64_to_net(meta.current_term()));
-    batch.Put(META_VOTE_FOR,     Endian::uint64_to_net(meta.voted_for()));
+    batch.Put(META_CURRENT_TERM,     Endian::uint64_to_net(meta.current_term()));
+    batch.Put(META_VOTED_FOR,        Endian::uint64_to_net(meta.voted_for()));
 
-    if (meta.commit_index())
+    if (meta.has_commit_index())
         batch.Put(META_COMMIT_INDEX, Endian::uint64_to_net(meta.commit_index()));
-    if (meta.apply_index())
+    if (meta.has_apply_index())
         batch.Put(META_APPLY_INDEX,  Endian::uint64_to_net(meta.apply_index()));
 
     leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
@@ -199,6 +208,23 @@ int LevelDBLog::update_meta_data(const LogMeta& meta) const {
     return 0;
 }
 
+int LevelDBLog::update_meta_commit_index(uint64_t commit_index) const {
+    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_COMMIT_INDEX, Endian::uint64_to_net(commit_index));
+    if (!status.ok()) {
+        roo::log_err("update %s meta failed.", META_COMMIT_INDEX);
+        return -1;
+    }
+    return 0;
+}
+
+int LevelDBLog::update_meta_apply_index(uint64_t apply_index) const {
+    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_APPLY_INDEX, Endian::uint64_to_net(apply_index));
+    if (!status.ok()) {
+        roo::log_err("update %s meta failed.", META_APPLY_INDEX);
+        return -1;
+    }
+    return 0;
+}
 
 int LevelDBLog::read_meta_data(LogMeta* meta_data) const {
 
@@ -206,32 +232,20 @@ int LevelDBLog::read_meta_data(LogMeta* meta_data) const {
     leveldb::Status status;
 
     status = log_meta_fp_->Get(leveldb::ReadOptions(), META_CURRENT_TERM, &val);
-    if (!status.ok()) {
-        roo::log_err("read %s failed.", META_CURRENT_TERM);
-        return -1;
-    }
-    meta_data->set_current_term(Endian::uint64_from_net(val));
+    if (status.ok())
+        meta_data->set_current_term(Endian::uint64_from_net(val));
 
-    status = log_meta_fp_->Get(leveldb::ReadOptions(), META_VOTE_FOR, &val);
-    if (!status.ok()) {
-        roo::log_err("read %s failed.", META_VOTE_FOR);
-        return -1;
-    }
-    meta_data->set_voted_for(Endian::uint64_from_net(val));
+    status = log_meta_fp_->Get(leveldb::ReadOptions(), META_VOTED_FOR, &val);
+    if (status.ok())
+        meta_data->set_voted_for(Endian::uint64_from_net(val));
 
     status = log_meta_fp_->Get(leveldb::ReadOptions(), META_COMMIT_INDEX, &val);
-    if (!status.ok()) {
-        roo::log_err("read %s failed.", META_COMMIT_INDEX);
-        return -1;
-    }
-    meta_data->set_commit_index(Endian::uint64_from_net(val));
+    if (status.ok())
+        meta_data->set_commit_index(Endian::uint64_from_net(val));
 
     status = log_meta_fp_->Get(leveldb::ReadOptions(), META_APPLY_INDEX, &val);
-    if (!status.ok()) {
-        roo::log_err("read %s failed.", META_APPLY_INDEX);
-        return -1;
-    }
-    meta_data->set_apply_index(Endian::uint64_from_net(val));
+    if (status.ok())
+        meta_data->set_apply_index(Endian::uint64_from_net(val));
 
     return 0;
 }

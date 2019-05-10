@@ -28,5 +28,11 @@ int Peer::send_rpc(uint16_t service_id, uint16_t opcode, const std::string& req)
 }
 
 
+std::ostream& operator<<(std::ostream& os, const Peer& peer) {
+    os << peer.str() << std::endl;
+    return os;
+}
+
+
 } // namespace sisyphus
 

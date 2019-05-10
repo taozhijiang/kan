@@ -28,9 +28,10 @@ public:
     virtual std::pair<uint64_t, uint64_t>
     append(const std::vector<EntryPtr>& newEntries) = 0;
 
-    virtual EntryPtr get_entry(uint64_t index) const = 0;
-    virtual bool get_entries(uint64_t start, std::vector<EntryPtr>& entries) const = 0;
-    virtual EntryPtr get_last_entry() const = 0;
+    virtual EntryPtr entry(uint64_t index) const = 0;
+    virtual bool     entries(uint64_t start, std::vector<EntryPtr>& entries) const = 0;
+    virtual std::pair<uint64_t, uint64_t>
+    last_term_and_index() const = 0;
 
     virtual uint64_t start_index() const = 0;
     virtual uint64_t last_index() const = 0;
@@ -39,8 +40,11 @@ public:
     virtual void truncate_prefix(uint64_t start_index) = 0;
     virtual void truncate_suffix(uint64_t last_index) = 0;
 
-    virtual int update_meta_data(const LogMeta& meta) const = 0;
     virtual int read_meta_data(LogMeta* meta_data) const = 0;
+    virtual int update_meta_data(const LogMeta& meta) const = 0;
+
+    virtual int update_meta_commit_index(uint64_t commit_index) const = 0;
+    virtual int update_meta_apply_index(uint64_t apply_index) const = 0;
 };
 
 

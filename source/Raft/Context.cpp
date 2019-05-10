@@ -1,11 +1,16 @@
 
+#include <other/Log.h>
+
 #include <Raft/Context.h>
 #include <Raft/Clock.h>
+#include <Raft/LogIf.h>
+
 
 namespace sisyphus {
 
 
-Context::Context(uint64_t id) :
+Context::Context(uint64_t id, std::unique_ptr<LogIf>& log_meta) :
+    log_meta_(log_meta),
     id_(id),
     leader_id_(0),
     term_(0),
@@ -13,15 +18,22 @@ Context::Context(uint64_t id) :
     quorum_granted_(),
     role_(Role::kFollower),
     commit_index_(0),
-    applied_index_(0) {
+    apply_index_(0) {
 
 }
 
 
-void Context::become_follower(uint64_t term, uint64_t leader) {
+void Context::become_follower(uint64_t term) {
 
-    term_ = term;
-    leader_id_ = leader;
+    if (term_ < term) {
+        roo::log_warning("stepdown from %lu to %lu", term_, term);
+        term_ = term;
+        leader_id_ = 0;
+        voted_for_ = 0;
+
+        update_meta();
+    }
+
     role_ = Role::kFollower;
 }
 
@@ -29,7 +41,7 @@ void Context::become_follower(uint64_t term, uint64_t leader) {
 // 发起选取前的操作
 void Context::become_candidate() {
 
-    incr_term();
+    term_++;
 
     leader_id_ = 0;
 
@@ -37,6 +49,8 @@ void Context::become_candidate() {
     voted_for_ = id_;
     quorum_granted_.clear();
     quorum_granted_.insert(id_);
+
+    update_meta();
     role_ = Role::kCandidate;
 }
 
@@ -49,6 +63,15 @@ void Context::become_leader() {
 }
 
 
+void Context::update_meta() {
+
+    LogIf::LogMeta meta{};
+    meta.set_current_term(term_);
+    meta.set_voted_for(voted_for_);
+
+    log_meta_->update_meta_data(meta);
+}
+
 std::string Context::str() const {
 
     std::stringstream ss;
@@ -60,9 +83,15 @@ std::string Context::str() const {
         << "   voted_for: " << voted_for_ << std::endl
         << "   role: " << (role_ == Role::kLeader ? "leader" : role_ == Role::kCandidate ? "candidate" : "follower") << std::endl
         << "   commit_index:" << commit_index_ << std::endl
-        << "   applied_index:" << applied_index_ << std::endl;
+        << "   apply_index:" << apply_index_ << std::endl;
 
     return ss.str();
+}
+
+
+std::ostream& operator<<(std::ostream& os, const Context& context) {
+    os << context.str() << std::endl;
+    return os;
 }
 
 

@@ -61,9 +61,9 @@ public:
 private:
 
     // 处理异步客户端收到的Peer回调
-    int do_handle_request_vote_response(const Raft::RequestVoteOps::Response& response);
-    int do_handle_append_entries_response(const Raft::AppendEntriesOps::Response& response);
-    int do_handle_install_snapshot_response(const Raft::InstallSnapshotOps::Response& response);
+    int do_handle_request_vote_callback(const Raft::RequestVoteOps::Response& response);
+    int do_handle_append_entries_callback(const Raft::AppendEntriesOps::Response& response);
+    int do_handle_install_snapshot_callback(const Raft::InstallSnapshotOps::Response& response);
 
     // 处理Peer发过来的RPC请求
     int do_handle_request_vote_request(const Raft::RequestVoteOps::Request& request, Raft::RequestVoteOps::Response& response);
@@ -85,6 +85,7 @@ private:
     // Timer
     SimpleTimer heartbeat_timer_;
     SimpleTimer election_timer_;
+    SimpleTimer withhold_votes_timer_;
 
     // current static conf, not protected
     std::map<uint64_t, std::shared_ptr<Peer>> peer_set_;

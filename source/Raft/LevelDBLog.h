@@ -20,9 +20,10 @@ public:
     std::pair<uint64_t, uint64_t>
     append(const std::vector<EntryPtr>& newEntries)override;
 
-    EntryPtr get_entry(uint64_t index) const override;
-    bool get_entries(uint64_t start, std::vector<EntryPtr>& entries) const override;
-    EntryPtr get_last_entry() const override;
+    EntryPtr entry(uint64_t index) const override;
+    bool     entries(uint64_t start, std::vector<EntryPtr>& entries) const override;
+    std::pair<uint64_t, uint64_t>
+    last_term_and_index() const override;
 
     uint64_t start_index() const override {
         return start_index_;
@@ -35,8 +36,11 @@ public:
     void truncate_prefix(uint64_t start_index)override;
     void truncate_suffix(uint64_t last_index)override;
 
-    int update_meta_data(const LogMeta& meta) const override;
     int read_meta_data(LogMeta* meta_data) const override;
+    int update_meta_data(const LogMeta& meta) const override;
+
+    int update_meta_commit_index(uint64_t commit_index) const override;
+    int update_meta_apply_index(uint64_t apply_index) const override;
 
 protected:
 
@@ -44,7 +48,7 @@ protected:
     uint64_t start_index_;
     uint64_t last_index_;
 
-    std::mutex log_mutex_;
+    mutable std::mutex log_mutex_;
     const std::string log_meta_path_;
     std::unique_ptr<leveldb::DB> log_meta_fp_;
 };

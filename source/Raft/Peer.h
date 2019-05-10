@@ -49,6 +49,9 @@ public:
 
     // 已经复制给peer的最高索引值
     uint64_t match_index_;
+
+    friend std::ostream& operator<<(std::ostream& os, const Peer& peer);
+
 };
 
 } // namespace sisyphus
