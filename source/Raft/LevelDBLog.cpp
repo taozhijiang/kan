@@ -250,7 +250,26 @@ int LevelDBLog::read_meta_data(LogMeta* meta_data) const {
     return 0;
 }
 
+uint64_t LevelDBLog::read_meta_commit_index() const {
 
+    std::string val;
+    leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), META_COMMIT_INDEX, &val);
+    if(status.ok())
+        return Endian::uint64_from_net(val);
+    
+    return 0;
+}
+
+
+uint64_t LevelDBLog::read_meta_apply_index() const {
+    
+    std::string val;
+    leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), META_APPLY_INDEX, &val);
+    if(status.ok())
+        return Endian::uint64_from_net(val);
+    
+    return 0;
+}
 
 
 } // namespace sisyphus

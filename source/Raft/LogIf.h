@@ -1,3 +1,4 @@
+#include <xtra_rhel.h>
 
 #include <cinttypes>
 #include <memory>
@@ -45,6 +46,9 @@ public:
 
     virtual int update_meta_commit_index(uint64_t commit_index) const = 0;
     virtual int update_meta_apply_index(uint64_t apply_index) const = 0;
+
+    virtual uint64_t read_meta_commit_index() const = 0;
+    virtual uint64_t read_meta_apply_index() const = 0;
 };
 
 

@@ -41,6 +41,8 @@ public:
 
     int update_meta_commit_index(uint64_t commit_index) const override;
     int update_meta_apply_index(uint64_t apply_index) const override;
+    uint64_t read_meta_commit_index() const override;
+    uint64_t read_meta_apply_index() const override;
 
 protected:
 

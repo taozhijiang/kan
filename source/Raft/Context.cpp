@@ -17,8 +17,7 @@ Context::Context(uint64_t id, std::unique_ptr<LogIf>& log_meta) :
     voted_for_(0),
     quorum_granted_(),
     role_(Role::kFollower),
-    commit_index_(0),
-    apply_index_(0) {
+    commit_index_(0) {
 
 }
 
@@ -82,8 +81,7 @@ std::string Context::str() const {
         << "   term: " << term_ << std::endl
         << "   voted_for: " << voted_for_ << std::endl
         << "   role: " << (role_ == Role::kLeader ? "leader" : role_ == Role::kCandidate ? "candidate" : "follower") << std::endl
-        << "   commit_index:" << commit_index_ << std::endl
-        << "   apply_index:" << apply_index_ << std::endl;
+        << "   commit_index:" << commit_index_ << std::endl;
 
     return ss.str();
 }

@@ -2,6 +2,7 @@
 #define __RAFT_RAFT_CONSENSUS_H__
 
 #include <xtra_rhel.h>
+
 #include <thread>
 
 
@@ -13,6 +14,7 @@
 #include <Raft/Context.h>
 #include <Raft/Option.h>
 #include <Raft/Clock.h>
+#include <Raft/StateMachine.h>
 
 #include <Client/include/RpcClientStatus.h>
 
@@ -66,9 +68,14 @@ private:
     int do_handle_install_snapshot_callback(const Raft::InstallSnapshotOps::Response& response);
 
     // 处理Peer发过来的RPC请求
-    int do_handle_request_vote_request(const Raft::RequestVoteOps::Request& request, Raft::RequestVoteOps::Response& response);
-    int do_handle_append_entries_request(const Raft::AppendEntriesOps::Request& request, Raft::AppendEntriesOps::Response& response);
-    int do_handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request, Raft::InstallSnapshotOps::Response& response);
+    int do_handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
+                                       Raft::RequestVoteOps::Response& response);
+    int do_handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
+                                         Raft::AppendEntriesOps::Response& response);
+    int do_handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
+                                           Raft::InstallSnapshotOps::Response& response);
+    // Leader检查cluster的日志状态，当日志复制到绝大多数节点(next_index)的时候，就将其确认为提交的
+    uint64_t advance_commit_index();
 
     int send_request_vote();
     int send_append_entries();
@@ -100,6 +107,8 @@ private:
     std::condition_variable main_notify_;
     bool main_thread_stop_;
     std::thread main_thread_;
+
+    std::unique_ptr<StateMachine> state_machine_;
 };
 
 } // namespace sisyphus

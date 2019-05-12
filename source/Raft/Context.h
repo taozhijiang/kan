@@ -70,7 +70,6 @@ private:
     enum Role role_;
 
     uint64_t commit_index_;
-    uint64_t apply_index_;
 
 
     friend std::ostream& operator<<(std::ostream& os, const Context& context);

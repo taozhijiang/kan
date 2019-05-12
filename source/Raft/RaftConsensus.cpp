@@ -123,7 +123,6 @@ bool RaftConsensus::init() {
         context_->set_voted_for(meta.voted_for());
     context_->update_meta();
 
-
     // bootstrap ???
     if (option_.bootstrap_) {
         roo::log_warning("bootstrap operation here ...");
@@ -146,6 +145,12 @@ bool RaftConsensus::init() {
         ::exit(EXIT_SUCCESS);
     }
 
+    // 状态机执行线程
+    state_machine_ = make_unique<StateMachine>(log_meta_);
+    if(!state_machine_ || !state_machine_->init()) {
+        roo::log_err("create and initialize state_machine failed.");
+        return false;
+    }
 
     // 主工作线程
     main_thread_ = std::thread(std::bind(&RaftConsensus::main_thread_run, this));
@@ -445,6 +450,19 @@ int RaftConsensus::do_handle_request_vote_callback(const Raft::RequestVoteOps::R
 }
 
 
+
+uint64_t RaftConsensus::advance_commit_index() {
+
+    std::vector<uint64_t> values {};
+    for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter)
+        values.push_back(iter->second->match_index_);
+
+    values.emplace_back(context_->commit_index());
+    std::sort(values.begin(), values.end());
+
+    return values.at((peer_set_.size() +1 - 1)/ 2);
+}
+
 int RaftConsensus::do_handle_append_entries_callback(const Raft::AppendEntriesOps::Response& response) {
 
     // 如果发现更大的term返回，则回退到follower
@@ -480,7 +498,20 @@ int RaftConsensus::do_handle_append_entries_callback(const Raft::AppendEntriesOp
         iter->second->match_index_ = response.last_log_index();
         iter->second->next_index_ = iter->second->match_index_  + 1;
 
-        // TODO commit_index ...
+        uint64_t new_commit_index = advance_commit_index();
+        if (log_meta_->entry(new_commit_index)->term() != context_->term()) {
+            roo::log_warning("new commit index term doesnot agree %lu %lu",
+                             log_meta_->entry(new_commit_index)->term(), context_->term());
+            return 0;
+        }
+
+        if (new_commit_index != context_->term()) {
+            roo::log_warning("advance commit index from %lu to %lu",
+                             context_->commit_index(), new_commit_index);
+            context_->set_commit_index(new_commit_index);
+            log_meta_->update_meta_commit_index(context_->commit_index());
+            state_machine_->notify_state_machine();
+        }
 
         return 0;
     }
@@ -580,6 +611,7 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
         *request_entries.Add() = *(entries[i]);
     }
 
+    // 确保commit_index的日志在Peer一定存在
     request.set_leader_commit(std::min(context_->commit_index(), prev_log_index + entries.size()));
     roo::log_warning("send to peer %lu, with entries from %lu, size %u, commit_index %lu",
                      peer.id_, prev_log_index, request.entries().size(), request.leader_commit());
