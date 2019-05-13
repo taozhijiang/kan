@@ -15,11 +15,13 @@
 #include <Raft/Option.h>
 #include <Raft/Clock.h>
 #include <Raft/StateMachine.h>
+#include <Raft/KVStore.h>
 
 #include <Client/include/RpcClientStatus.h>
 
 namespace tzrpc {
 class RaftService;
+class ClientService;
 }
 
 namespace sisyphus {
@@ -29,8 +31,11 @@ class Clock;
 
 class RaftConsensus {
 
-    // will access internal do_handle_xxx_request
+    // access internal do_handle_xxx_request
     friend class tzrpc::RaftService;
+
+    // access internal kv_store_
+    friend class tzrpc::ClientService;
 
     // access internal main_notify_
     friend class Clock;
@@ -60,6 +65,12 @@ public:
     // 对于向peer发送的rpc请求，其响应都会在这个函数中异步执行
     int handle_rpc_callback(RpcClientStatus status, uint16_t service_id, uint16_t opcode, const std::string& rsp);
 
+    // 暴露给ClientService使用的业务侧接口
+    // 如果本机就是Leader，则返回0，否则返回Leader的id
+    uint64_t current_leader();
+    int state_machine_modify(const std::string& cmd);
+
+
 private:
 
     // 处理异步客户端收到的Peer回调
@@ -74,7 +85,9 @@ private:
                                          Raft::AppendEntriesOps::Response& response);
     int do_handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
                                            Raft::InstallSnapshotOps::Response& response);
-    // Leader检查cluster的日志状态，当日志复制到绝大多数节点(next_index)的时候，就将其确认为提交的
+
+    // Leader检查cluster的日志状态
+    // 当日志复制到绝大多数节点(next_index)的时候，就将其确认为提交的
     uint64_t advance_commit_index();
 
     int send_request_vote();
@@ -82,7 +95,7 @@ private:
     int send_append_entries(const Peer& peer);
     int send_install_snapshot();
 
-    void main_thread_run();
+    void main_thread_loop();
 
 private:
 
@@ -109,6 +122,7 @@ private:
     std::thread main_thread_;
 
     std::unique_ptr<StateMachine> state_machine_;
+    std::unique_ptr<KVStore>      kv_store_;
 };
 
 } // namespace sisyphus

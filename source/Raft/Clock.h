@@ -3,6 +3,12 @@
 
 #include <xtra_rhel.h>
 
+
+// 如果直接处理时间的话可能会比较抓狂，所以这边采用逻辑时钟的概念
+// 来控制，即每 100ms定时器将当前的时钟值自增
+// 内部涉及到的Raft的定时器都采用这个时钟来驱动
+
+
 namespace sisyphus {
 
 class Clock {
@@ -34,6 +40,7 @@ public:
         return false;
     }
 
+    // 是否在某个时间范围内，这边在投票优化的时候用到
     bool within(uint64_t timeout) const {
         if (enable_)
             return start_tick_ + timeout > Clock::current();
@@ -41,6 +48,7 @@ public:
         return false;
     }
 
+    // 启动定时器
     void schedule() {
         enable_ = true;
         start_tick_ = Clock::current();

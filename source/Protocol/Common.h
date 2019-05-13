@@ -13,7 +13,8 @@ namespace tzrpc {
 namespace ServiceID {
 
 enum {
-    RAFT_SERVICE = 1, // raft core service
+    RAFT_SERVICE = 1,   // raft core service
+    CLIENT_SERVICE = 2,
 };
 
 }

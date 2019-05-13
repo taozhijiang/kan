@@ -6,6 +6,8 @@
 #include <Client/include/RpcClient.h>
 
 
+// 集群中的每一个成员(除了本身)会使用Peer来管理
+
 namespace sisyphus {
 
 using tzrpc_client::rpc_handler_t;
@@ -22,8 +24,8 @@ public:
     int send_rpc(uint16_t service_id, uint16_t opcode, const std::string& req) const;
 
     std::string str() const {
-        std::stringstream ss;
 
+        std::stringstream ss;
         ss  << "peer info: " << std::endl
             << "    id: " << id_ << std::endl
             << "    addr&port: " << addr_ << " " << port_ << std::endl
@@ -35,6 +37,15 @@ public:
 
 public:
 
+    uint64_t id() const { return id_; }
+
+    uint64_t next_index() const { return next_index_; }
+    uint64_t match_index() const { return match_index_; }
+
+    void set_next_index(uint64_t index) { next_index_ = index; }
+    void set_match_index(uint64_t index) { match_index_ = index; }
+
+private:
     const uint64_t id_;
 
     const std::string addr_;
@@ -47,7 +58,7 @@ public:
     // 对应于需要发送的下一条日志的索引值，初始化为leader的日志最后索引值+1
     uint64_t next_index_;
 
-    // 已经复制给peer的最高索引值
+    // 已经复制给peer的最高索引值，新选主后会将该值设置为0
     uint64_t match_index_;
 
     friend std::ostream& operator<<(std::ostream& os, const Peer& peer);

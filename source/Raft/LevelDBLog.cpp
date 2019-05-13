@@ -187,46 +187,7 @@ void LevelDBLog::truncate_suffix(uint64_t last_index) {
 
 
 
-
-int LevelDBLog::update_meta_data(const LogMeta& meta) const {
-
-    leveldb::WriteBatch batch;
-    batch.Put(META_CURRENT_TERM,     Endian::uint64_to_net(meta.current_term()));
-    batch.Put(META_VOTED_FOR,        Endian::uint64_to_net(meta.voted_for()));
-
-    if (meta.has_commit_index())
-        batch.Put(META_COMMIT_INDEX, Endian::uint64_to_net(meta.commit_index()));
-    if (meta.has_apply_index())
-        batch.Put(META_APPLY_INDEX,  Endian::uint64_to_net(meta.apply_index()));
-
-    leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
-    if (!status.ok()) {
-        roo::log_err("update_meta_data write failed");
-        return -1;
-    }
-
-    return 0;
-}
-
-int LevelDBLog::update_meta_commit_index(uint64_t commit_index) const {
-    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_COMMIT_INDEX, Endian::uint64_to_net(commit_index));
-    if (!status.ok()) {
-        roo::log_err("update %s meta failed.", META_COMMIT_INDEX);
-        return -1;
-    }
-    return 0;
-}
-
-int LevelDBLog::update_meta_apply_index(uint64_t apply_index) const {
-    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_APPLY_INDEX, Endian::uint64_to_net(apply_index));
-    if (!status.ok()) {
-        roo::log_err("update %s meta failed.", META_APPLY_INDEX);
-        return -1;
-    }
-    return 0;
-}
-
-int LevelDBLog::read_meta_data(LogMeta* meta_data) const {
+int LevelDBLog::meta_data(LogMeta* meta_data) const {
 
     std::string val;
     leveldb::Status status;
@@ -250,24 +211,63 @@ int LevelDBLog::read_meta_data(LogMeta* meta_data) const {
     return 0;
 }
 
-uint64_t LevelDBLog::read_meta_commit_index() const {
+
+int LevelDBLog::set_meta_data(const LogMeta& meta) const {
+
+    leveldb::WriteBatch batch;
+    batch.Put(META_CURRENT_TERM,     Endian::uint64_to_net(meta.current_term()));
+    batch.Put(META_VOTED_FOR,        Endian::uint64_to_net(meta.voted_for()));
+
+    if (meta.has_commit_index())
+        batch.Put(META_COMMIT_INDEX, Endian::uint64_to_net(meta.commit_index()));
+    if (meta.has_apply_index())
+        batch.Put(META_APPLY_INDEX,  Endian::uint64_to_net(meta.apply_index()));
+
+    leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
+    if (!status.ok()) {
+        roo::log_err("update_meta_data write failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+uint64_t LevelDBLog::meta_commit_index() const {
 
     std::string val;
     leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), META_COMMIT_INDEX, &val);
-    if(status.ok())
+    if (status.ok())
         return Endian::uint64_from_net(val);
-    
+
     return 0;
 }
 
 
-uint64_t LevelDBLog::read_meta_apply_index() const {
-    
+uint64_t LevelDBLog::meta_apply_index() const {
+
     std::string val;
     leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), META_APPLY_INDEX, &val);
-    if(status.ok())
+    if (status.ok())
         return Endian::uint64_from_net(val);
-    
+
+    return 0;
+}
+
+int LevelDBLog::set_meta_commit_index(uint64_t commit_index) const {
+    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_COMMIT_INDEX, Endian::uint64_to_net(commit_index));
+    if (!status.ok()) {
+        roo::log_err("set %s meta failed.", META_COMMIT_INDEX);
+        return -1;
+    }
+    return 0;
+}
+
+int LevelDBLog::set_meta_apply_index(uint64_t apply_index) const {
+    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_APPLY_INDEX, Endian::uint64_to_net(apply_index));
+    if (!status.ok()) {
+        roo::log_err("set %s meta failed.", META_APPLY_INDEX);
+        return -1;
+    }
     return 0;
 }
 

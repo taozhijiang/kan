@@ -17,6 +17,7 @@ public:
     explicit LevelDBLog(const std::string& path);
     virtual ~LevelDBLog();
 
+    // 返回start_index, last_index
     std::pair<uint64_t, uint64_t>
     append(const std::vector<EntryPtr>& newEntries)override;
 
@@ -36,22 +37,25 @@ public:
     void truncate_prefix(uint64_t start_index)override;
     void truncate_suffix(uint64_t last_index)override;
 
-    int read_meta_data(LogMeta* meta_data) const override;
-    int update_meta_data(const LogMeta& meta) const override;
 
-    int update_meta_commit_index(uint64_t commit_index) const override;
-    int update_meta_apply_index(uint64_t apply_index) const override;
-    uint64_t read_meta_commit_index() const override;
-    uint64_t read_meta_apply_index() const override;
+    // Raft运行状态元数据的持久化
+
+    int meta_data(LogMeta* meta_data) const override;
+    int set_meta_data(const LogMeta& meta) const override;
+
+    uint64_t meta_commit_index() const override;
+    uint64_t meta_apply_index() const override;
+    int set_meta_commit_index(uint64_t commit_index) const override;
+    int set_meta_apply_index(uint64_t apply_index) const override;
 
 protected:
 
-    // 最后的日志索引，暂时不支持日志清除，所以不设置start_index_
+    // 最历史的日志索引，在日志压缩的时候会设置这个值
     uint64_t start_index_;
-    uint64_t last_index_;
+    uint64_t last_index_;   // 初始化为0，有效值从1开始
 
-    mutable std::mutex log_mutex_;
-    const std::string log_meta_path_;
+    mutable std::mutex  log_mutex_;
+    const std::string   log_meta_path_;
     std::unique_ptr<leveldb::DB> log_meta_fp_;
 };
 

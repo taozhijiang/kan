@@ -102,6 +102,11 @@ bool RaftConsensus::init() {
         return false;
     }
 
+    kv_store_ = make_unique<KVStore>(option_.log_path_ + "/kv_store");
+    if (!kv_store_) {
+        roo::log_err("create kv_store_ failed.");
+        return false;
+    }
 
     // create context
     context_ = make_unique<Context>(option_.id_, log_meta_);
@@ -112,15 +117,14 @@ bool RaftConsensus::init() {
 
     // 获取meta数据
     LogIf::LogMeta meta;
-    log_meta_->read_meta_data(&meta);
+    log_meta_->meta_data(&meta);
     if (meta.has_current_term())
         context_->set_term(meta.current_term());
     if (meta.has_voted_for())
         context_->set_voted_for(meta.voted_for());
     if (meta.has_commit_index())
         context_->set_commit_index(meta.commit_index());
-    if (meta.has_apply_index())
-        context_->set_voted_for(meta.voted_for());
+
     context_->update_meta();
 
     // bootstrap ???
@@ -146,14 +150,14 @@ bool RaftConsensus::init() {
     }
 
     // 状态机执行线程
-    state_machine_ = make_unique<StateMachine>(log_meta_);
-    if(!state_machine_ || !state_machine_->init()) {
+    state_machine_ = make_unique<StateMachine>(log_meta_, kv_store_);
+    if (!state_machine_ || !state_machine_->init()) {
         roo::log_err("create and initialize state_machine failed.");
         return false;
     }
 
     // 主工作线程
-    main_thread_ = std::thread(std::bind(&RaftConsensus::main_thread_run, this));
+    main_thread_ = std::thread(std::bind(&RaftConsensus::main_thread_loop, this));
 
     // 系统的时钟ticket
     if (!Captain::instance().timer_ptr_->add_timer(
@@ -170,6 +174,37 @@ bool RaftConsensus::init() {
     return true;
 }
 
+
+uint64_t RaftConsensus::current_leader() {
+    if (context_->leader_id() == context_->id())
+        return 0;
+    return context_->leader_id();
+}
+
+
+int RaftConsensus::state_machine_modify(const std::string& cmd) {
+    if (cmd.empty()) {
+        roo::log_err("empty cmd info.");
+        return -1;
+    }
+
+    if (current_leader() != 0) {
+        roo::log_err("not leader, can not handle state_machine_modify.");
+        return -1;
+    }
+
+
+    // 创建空的追加日志RPC
+    LogIf::EntryPtr entry = std::make_shared<LogIf::Entry>();
+    entry->set_term(context_->term());
+    entry->set_type(Raft::EntryType::kNormal);
+    entry->set_data(cmd);
+    auto idx = log_meta_->append({ entry });
+
+    send_append_entries();
+
+    return 0;
+}
 
 int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_id, uint16_t opcode, const std::string& rsp) {
 
@@ -362,7 +397,7 @@ int RaftConsensus::do_handle_append_entries_request(const Raft::AppendEntriesOps
     // Leader在设置该参数的时候，就确保了该值肯定不会超过该Peer的日志范围的
     if (context_->commit_index() < request.leader_commit()) {
         context_->set_commit_index(request.leader_commit());
-        log_meta_->update_meta_commit_index(context_->commit_index());
+        log_meta_->set_meta_commit_index(context_->commit_index());
     }
 
     return 0;
@@ -391,7 +426,7 @@ int RaftConsensus::do_handle_request_vote_callback(const Raft::RequestVoteOps::R
         LogIf::LogMeta meta;
         meta.set_current_term(response.term());
         meta.set_voted_for(response.peer_id());
-        log_meta_->update_meta_data(meta);
+        log_meta_->set_meta_data(meta);
         return 0;
     }
 
@@ -421,8 +456,8 @@ int RaftConsensus::do_handle_request_vote_callback(const Raft::RequestVoteOps::R
 
                 // 更新每个peer的数据
                 for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter) {
-                    iter->second->next_index_ = log_meta_->last_index() + 1;
-                    iter->second->match_index_ = 0;
+                    iter->second->set_next_index(log_meta_->last_index() + 1);
+                    iter->second->set_match_index(0);
                 }
 
                 // 选举完成，切换成心跳定时器，关闭选取定时器
@@ -450,17 +485,17 @@ int RaftConsensus::do_handle_request_vote_callback(const Raft::RequestVoteOps::R
 }
 
 
-
+// 当日志被复制到绝大多数节点上的时候，我们就将其设置为已提交的状态
 uint64_t RaftConsensus::advance_commit_index() {
 
-    std::vector<uint64_t> values {};
+    std::vector<uint64_t> values{};
     for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter)
-        values.push_back(iter->second->match_index_);
+        values.push_back(iter->second->match_index());
 
-    values.emplace_back(context_->commit_index());
+    values.emplace_back(log_meta_->last_index());
     std::sort(values.begin(), values.end());
 
-    return values.at((peer_set_.size() +1 - 1)/ 2);
+    return values.at((peer_set_.size() + 1 - 1) / 2);
 }
 
 int RaftConsensus::do_handle_append_entries_callback(const Raft::AppendEntriesOps::Response& response) {
@@ -475,60 +510,68 @@ int RaftConsensus::do_handle_append_entries_callback(const Raft::AppendEntriesOp
         LogIf::LogMeta meta;
         meta.set_current_term(response.term());
         meta.set_voted_for(response.peer_id());
-        log_meta_->update_meta_data(meta);
+        log_meta_->set_meta_data(meta);
         return 0;
     }
+
+    // 原始协议应该是prev_log_index + numEntries，但是这边没有原始调用的信息，所以
+    // 就按照返回的last_log_index来设置了
+    if (!response.has_last_log_index()) {
+        PANIC("By our implementation, AppendEntries response field last_log_index is required!");
+    }
+
 
     auto iter = peer_set_.find(response.peer_id());
     if (iter == peer_set_.end()) {
         roo::log_err("recv response outside of cluster with id %lu.", response.peer_id());
         return -1;
     }
+    auto peer_ptr = iter->second;
 
-    if (!response.has_last_log_index()) {
-        PANIC("last_log_index is required!");
-    }
 
     // 日志追加成功，更新next_index_
     if (response.success() == true) {
-        roo::log_warning("append entries for peer %lu success.", response.peer_id());
 
-        // 原始协议应该是prev_log_index + numEntries，但是这边没有原始调用的信息，所以
-        // 就按照返回的last_log_index来设置了
-        iter->second->match_index_ = response.last_log_index();
-        iter->second->next_index_ = iter->second->match_index_  + 1;
+        peer_ptr->set_match_index(response.last_log_index());
+        peer_ptr->set_next_index(peer_ptr->match_index() + 1);
 
         uint64_t new_commit_index = advance_commit_index();
+        // 这是可能发生的，因为一旦选主成功后，所有的match_index都可能会复位
+        if (new_commit_index <= context_->commit_index())
+            return 0;
+
         if (log_meta_->entry(new_commit_index)->term() != context_->term()) {
             roo::log_warning("new commit index term doesnot agree %lu %lu",
                              log_meta_->entry(new_commit_index)->term(), context_->term());
             return 0;
         }
 
-        if (new_commit_index != context_->term()) {
+        if (new_commit_index != context_->commit_index()) {
             roo::log_warning("advance commit index from %lu to %lu",
                              context_->commit_index(), new_commit_index);
             context_->set_commit_index(new_commit_index);
-            log_meta_->update_meta_commit_index(context_->commit_index());
+            log_meta_->set_meta_commit_index(context_->commit_index());
             state_machine_->notify_state_machine();
         }
 
         return 0;
     }
 
-    if (iter->second->next_index_ > 1)
-        --iter->second->next_index_;
+    // 默认情况是依次递减来尝试的
+    if (peer_ptr->next_index() > 1)
+        peer_ptr->set_next_index(peer_ptr->next_index() - 1);
 
-    if (iter->second->next_index_ > response.last_log_index() + 1) {
-        iter->second->next_index_ = response.last_log_index() + 1;
+    // 如果响应返回了last_log_index，则使用这个提示值
+    if (peer_ptr->next_index() > response.last_log_index() + 1) {
+        peer_ptr->set_next_index(response.last_log_index() + 1);
     }
 
 
     // 日志不匹配，减少next_index_然后重发
-    roo::log_err("append entries for peer %lu failed, try from %lu", response.peer_id(), iter->second->next_index_);
+    roo::log_err("append entries for peer %lu failed, try from %lu", response.peer_id(), iter->second->next_index());
 
     // schedule append_entries again
-    send_append_entries(*iter->second);
+    send_append_entries(*peer_ptr);
     return 0;
 }
 
@@ -578,15 +621,15 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
     // 无论如何，send_append_entries都要发送，否则leader无法维持心跳
     // 发送的entry内容可以为空
 
-    uint64_t prev_log_index = peer.next_index_ - 1;
+    uint64_t prev_log_index = peer.next_index() - 1;
     uint64_t prev_log_term = 0;
 
     if (prev_log_index >= log_meta_->start_index()) {
         LogIf::EntryPtr prev_log = log_meta_->entry(prev_log_index);
         if (!prev_log) {
             roo::log_err("current leader last_log_index %lu, peer %lu with next_id %lu",
-                         log_meta_->last_index(), peer.id_, peer.next_index_);
-            roo::log_err("Get prev_log entry index %lu for %lu failed.", prev_log_index, peer.id_);
+                         log_meta_->last_index(), peer.id(), peer.next_index());
+            roo::log_err("Get prev_log entry index %lu for %lu failed.", prev_log_index, peer.id());
             return -1;
         }
 
@@ -601,8 +644,8 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
 
     // 可以为空，此时为纯粹的心跳
     // TODO: 限制每次发送的日志条目数
-    if (!log_meta_->entries(peer.next_index_, entries)) {
-        roo::log_err("Get entries for %lu failed, from %lu", peer.id_, prev_log_index);
+    if (!log_meta_->entries(peer.next_index(), entries)) {
+        roo::log_err("Get entries for %lu failed, from %lu", peer.id(), prev_log_index);
         return -1;
     }
 
@@ -614,7 +657,7 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
     // 确保commit_index的日志在Peer一定存在
     request.set_leader_commit(std::min(context_->commit_index(), prev_log_index + entries.size()));
     roo::log_warning("send to peer %lu, with entries from %lu, size %u, commit_index %lu",
-                     peer.id_, prev_log_index, request.entries().size(), request.leader_commit());
+                     peer.id(), prev_log_index, request.entries().size(), request.leader_commit());
 
     std::string str_request;
     roo::ProtoBuf::marshalling_to_string(request, &str_request);
@@ -629,7 +672,7 @@ int RaftConsensus::send_install_snapshot() {
 }
 
 
-void RaftConsensus::main_thread_run() {
+void RaftConsensus::main_thread_loop() {
 
     while (!main_thread_stop_) {
 

@@ -22,6 +22,7 @@
 #include <RPC/Dispatcher.h>
 #include <Protocol/Common.h>
 #include <Protocol/ServiceImpl/RaftService.h>
+#include <Protocol/ServiceImpl/ClientService.h>
 
 
 #include <Raft/RaftConsensus.h>
@@ -44,6 +45,7 @@ Captain::Captain():
 using tzrpc::Dispatcher;
 using tzrpc::Service;
 using tzrpc::RaftService;
+using tzrpc::ClientService;
 
 bool Captain::init(const std::string& cfgFile) {
 
@@ -100,6 +102,14 @@ bool Captain::init(const std::string& cfgFile) {
         return false;
     }
     Dispatcher::instance().register_service(tzrpc::ServiceID::RAFT_SERVICE, raft_service);
+
+    std::shared_ptr<Service> client_service = std::make_shared<ClientService>("ClientService");
+    if (!client_service || !client_service->init()) {
+        roo::log_err("create ClientService failed.");
+        return false;
+    }
+    Dispatcher::instance().register_service(tzrpc::ServiceID::CLIENT_SERVICE, client_service);
+
 
     // 再进行整体服务的初始化
     if (!Dispatcher::instance().init()) {

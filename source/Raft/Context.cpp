@@ -25,7 +25,7 @@ Context::Context(uint64_t id, std::unique_ptr<LogIf>& log_meta) :
 void Context::become_follower(uint64_t term) {
 
     if (term_ < term) {
-        roo::log_warning("stepdown from %lu to %lu", term_, term);
+        roo::log_warning("stepdown node from term %lu to %lu", term_, term);
         term_ = term;
         leader_id_ = 0;
         voted_for_ = 0;
@@ -44,7 +44,7 @@ void Context::become_candidate() {
 
     leader_id_ = 0;
 
-    // 给自己投票
+    // 首先给自己投票
     voted_for_ = id_;
     quorum_granted_.clear();
     quorum_granted_.insert(id_);
@@ -68,19 +68,18 @@ void Context::update_meta() {
     meta.set_current_term(term_);
     meta.set_voted_for(voted_for_);
 
-    log_meta_->update_meta_data(meta);
+    log_meta_->set_meta_data(meta);
 }
 
 std::string Context::str() const {
 
     std::stringstream ss;
 
-    ss
-        << "    server_id: " << id_ << std::endl
+    ss  << "   server_id: " << id_ << std::endl
         << "   leader_id: " << leader_id_ << std::endl
         << "   term: " << term_ << std::endl
         << "   voted_for: " << voted_for_ << std::endl
-        << "   role: " << (role_ == Role::kLeader ? "leader" : role_ == Role::kCandidate ? "candidate" : "follower") << std::endl
+        << "   role: " << RoleStr(role_) << std::endl
         << "   commit_index:" << commit_index_ << std::endl;
 
     return ss.str();

@@ -35,6 +35,9 @@ enum class RpcClientStatus : uint8_t {
     INVALID_REQUEST = 4,
 
     SYSTEM_ERROR    = 5,
+
+    NOT_LEADER      = 6,     // Raft中请求到非Leader节点
+
     // 以上部分是和服务端相互兼容的
 
     // 未发送网络请求，客户端可以考虑重发
@@ -46,6 +49,7 @@ enum class RpcClientStatus : uint8_t {
 
     RPC_CALL_TIMEOUT      = 20,
     RECV_FORMAT_ERROR     = 21,      // 接收的报文解析错误
+
 
 };
 

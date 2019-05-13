@@ -6,9 +6,9 @@
 namespace sisyphus {
 
 enum class Role : uint8_t {
-    kFollower = 1,
-    kCandidate = 2,
-    kLeader = 3,
+    kFollower   = 1,
+    kCandidate  = 2,
+    kLeader     = 3,
 };
 
 static inline std::string RoleStr(enum Role role) {
@@ -44,7 +44,7 @@ public:
     void add_quorum_granted(uint64_t peer_id) { quorum_granted_.insert(peer_id); }
     void set_commit_index(uint64_t commit_index) { commit_index_ = commit_index; }
 
-    // 角色切换
+    // 集群中节点角色切换
     // same as stepdown
     void become_follower(uint64_t term);
     void become_candidate();

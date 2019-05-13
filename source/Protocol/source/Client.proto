@@ -1,0 +1,36 @@
+syntax="proto2";
+package sisyphus.Client;
+
+enum OpCode {
+    kRead        = 1;
+    kWrite       = 2;
+};
+
+
+message StateMachineReadOps {
+
+    message Request {
+        required bytes  key             = 1; 
+    }
+
+    message Response {
+        required int32  code            = 1;
+        optional string msg             = 2;
+
+        optional bytes  val             = 5;
+    }
+}
+
+
+message StateMachineWriteOps {
+
+    message Request {
+        required bytes  key             = 1; 
+        required bytes  val             = 2;
+    }
+
+    message Response {
+        required int32  code            = 1;
+        optional string msg             = 2;
+    }
+}
