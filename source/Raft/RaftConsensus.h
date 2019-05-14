@@ -25,6 +25,7 @@
 #include <Raft/StateMachine.h>
 #include <Raft/StoreIf.h>
 
+#include <Client/include/RpcClient.h>
 #include <Client/include/RpcClientStatus.h>
 
 namespace tzrpc {
@@ -75,7 +76,9 @@ public:
 
     // 暴露给ClientService使用的业务侧接口
     // 如果本机就是Leader，则返回0，否则返回Leader的id
-    uint64_t current_leader();
+    uint64_t my_id() const;
+    uint64_t current_leader() const;
+    std::shared_ptr<Peer> get_peer(uint64_t peer_id) const;
     int state_machine_modify(const std::string& cmd);
 
 

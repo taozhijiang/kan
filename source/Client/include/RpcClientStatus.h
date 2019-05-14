@@ -38,6 +38,8 @@ enum class RpcClientStatus : uint8_t {
 
     NOT_LEADER      = 6,     // Raft中请求到非Leader节点
 
+    REQUEST_PROXY_ERROR = 7, // 非Leader节点转发客户端请求失败
+
     // 以上部分是和服务端相互兼容的
 
     // 未发送网络请求，客户端可以考虑重发

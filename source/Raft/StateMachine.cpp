@@ -5,6 +5,8 @@
  *
  */
 
+#include <system/ConstructException.h>
+
 #include <other/Log.h>
 
 #include <Raft/LevelDBLog.h>
@@ -24,6 +26,9 @@ StateMachine::StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<Sto
     lock_(),
     apply_notify_(),
     main_executor_stop_(false) {
+
+    if(!log_meta_ || !kv_store)
+        throw roo::ConstructException("invalid log_meta and kv_store provided.");
 }
 
 bool StateMachine::init() {

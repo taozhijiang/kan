@@ -192,12 +192,36 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
     }
 
     // 考虑Legacy读优化性能？
-    if (Captain::instance().raft_consensus_ptr_->current_leader() != 0) {
-        roo::log_warning("Bad, The leader is %lu", Captain::instance().raft_consensus_ptr_->current_leader());
-        rpc_instance->reject(RpcResponseStatus::NOT_LEADER);
+
+    // 检查是否是Leader，如果不是就将其请求转发给Leader，然后再将结果返回给Client
+    uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
+    if (leader_id != 0) {
+        roo::log_warning("The leader is %lu, will atomaticlly forward this request", leader_id);
+        
+        auto client = Captain::instance().raft_consensus_ptr_->get_peer(leader_id);
+        if(!client) {
+            roo::log_err("Peer (of Leader) %lu not found!", leader_id);
+            rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+            return;
+        }
+
+        std::string proxy_response_str {};
+        int code = client->proxy_client_RPC(rpc_request_message.header_.service_id,
+                                            rpc_request_message.header_.opcode, 
+                                            rpc_request_message.payload_,
+                                            proxy_response_str);
+        if(code != 0) {
+            roo::log_err("Forward client request from %lu to %lu failed with %d",  
+            Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
+            rpc_instance->reject(RpcResponseStatus::REQUEST_PROXY_ERROR);
+            return;
+        }
+
+        rpc_instance->reply_rpc_message(proxy_response_str);
         return;
     }
 
+    // 如果是Leader，则直接处理请求
     sisyphus::Client::StateMachineSelectOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
@@ -228,7 +252,34 @@ void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance
         return;
     }
 
-    // 检查是否是Leader
+    // 检查是否是Leader，如果不是就将其请求转发给Leader，然后再将结果返回给Client
+    uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
+    if (leader_id != 0) {
+        roo::log_warning("The leader is %lu, will atomaticlly forward this request", leader_id);
+        
+        auto client = Captain::instance().raft_consensus_ptr_->get_peer(leader_id);
+        if(!client) {
+            roo::log_err("Peer (of Leader) %lu not found!", leader_id);
+            rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+            return;
+        }
+
+        std::string proxy_response_str {};
+        int code = client->proxy_client_RPC(rpc_request_message.header_.service_id,
+                                            rpc_request_message.header_.opcode, 
+                                            rpc_request_message.payload_,
+                                            proxy_response_str);
+        if(code != 0) {
+            roo::log_err("Forward client request from %lu to %lu failed with %d",  
+            Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
+            rpc_instance->reject(RpcResponseStatus::REQUEST_PROXY_ERROR);
+            return;
+        }
+
+        rpc_instance->reply_rpc_message(proxy_response_str);
+        return;
+    }
+    
     if (Captain::instance().raft_consensus_ptr_->current_leader() != 0) {
         roo::log_warning("Bad, The leader is %lu", Captain::instance().raft_consensus_ptr_->current_leader());
         rpc_instance->reject(RpcResponseStatus::NOT_LEADER);

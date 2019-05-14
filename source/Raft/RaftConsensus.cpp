@@ -183,12 +183,26 @@ bool RaftConsensus::init() {
 }
 
 
-uint64_t RaftConsensus::current_leader() {
+uint64_t RaftConsensus::my_id() const {
+    return context_->id();
+}
+
+uint64_t RaftConsensus::current_leader() const {
     if (context_->leader_id() == context_->id())
         return 0;
     return context_->leader_id();
 }
 
+
+std::shared_ptr<Peer> RaftConsensus::get_peer(uint64_t peer_id) const {
+    auto peer = peer_set_.find(peer_id);
+    if(peer == peer_set_.end()) {
+        roo::log_err("Request peer_id %lu is not in peer_set!", peer_id);
+        return {};
+    }
+
+    return peer->second;
+}
 
 int RaftConsensus::state_machine_modify(const std::string& cmd) {
 
@@ -605,7 +619,7 @@ int RaftConsensus::send_request_vote() {
     roo::ProtoBuf::marshalling_to_string(request, &str_request);
 
     for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter) {
-        iter->second->send_rpc(tzrpc::ServiceID::RAFT_SERVICE, Raft::OpCode::kRequestVote, str_request);
+        iter->second->send_raft_RPC(tzrpc::ServiceID::RAFT_SERVICE, Raft::OpCode::kRequestVote, str_request);
     }
 
     return 0;
@@ -668,7 +682,7 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
 
     std::string str_request;
     roo::ProtoBuf::marshalling_to_string(request, &str_request);
-    peer.send_rpc(tzrpc::ServiceID::RAFT_SERVICE, Raft::OpCode::kAppendEntries, str_request);
+    peer.send_raft_RPC(tzrpc::ServiceID::RAFT_SERVICE, Raft::OpCode::kAppendEntries, str_request);
 
     return 0;
 }

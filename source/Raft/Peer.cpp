@@ -5,6 +5,8 @@
  *
  */
 
+#include <xtra_rhel.h>
+#include <system/ConstructException.h>
 
 #include <Raft/Peer.h>
 
@@ -20,21 +22,29 @@ Peer::Peer(uint64_t id,
     port_(port),
     handler_(handler),
     rpc_client_(),
+    rpc_proxy_(),
     next_index_(0),
     match_index_(0) {
 
-    rpc_client_.reset(new RpcClient(addr_, port_, handler_));
+    rpc_client_ = make_unique<RpcClient>(addr_, port_, handler_);
+    rpc_proxy_  = make_unique<RpcClient>(addr_, port_);
+
+    if(!rpc_client_ || !rpc_proxy_)
+        throw roo::ConstructException("create Peer RpClient failed.");
 }
 
-Peer::~Peer() {
-}
-
-
-int Peer::send_rpc(uint16_t service_id, uint16_t opcode, const std::string& req) const {
-    RpcClientStatus status = rpc_client_->call_RPC(service_id, opcode, req);
+int Peer::send_raft_RPC(uint16_t service_id, uint16_t opcode, const std::string& payload) const {
+    RpcClientStatus status = rpc_client_->call_RPC(service_id, opcode, payload);
     return status == RpcClientStatus::OK ? 0 : -1;
 }
 
+
+
+int Peer::proxy_client_RPC(uint16_t service_id, uint16_t opcode,
+                         const std::string& payload, std::string& respload) const {
+    RpcClientStatus status = rpc_proxy_->call_RPC(service_id, opcode, payload, respload);
+    return status == RpcClientStatus::OK ? 0 : -1;
+}
 
 std::ostream& operator<<(std::ostream& os, const Peer& peer) {
     os << peer.str() << std::endl;

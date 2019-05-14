@@ -26,9 +26,12 @@ class Peer {
 public:
     Peer(uint64_t id,
          const std::string& addr, uint16_t port, const rpc_handler_t& handler);
-    ~Peer();
+    ~Peer() = default;
 
-    int send_rpc(uint16_t service_id, uint16_t opcode, const std::string& req) const;
+    int send_raft_RPC(uint16_t service_id, uint16_t opcode, const std::string& payload) const;
+
+    int proxy_client_RPC(uint16_t service_id, uint16_t opcode,
+                         const std::string& payload, std::string& respload) const;
 
     std::string str() const {
 
@@ -59,8 +62,11 @@ private:
     uint16_t port_;
     rpc_handler_t handler_;
 
-
+    // Raft协议使用的RPC
     std::unique_ptr<RpcClient> rpc_client_;
+
+    // 客户端请求的RPC转发(到Leader)
+    std::unique_ptr<RpcClient> rpc_proxy_;
 
     // 对应于需要发送的下一条日志的索引值，初始化为leader的日志最后索引值+1
     uint64_t next_index_;
