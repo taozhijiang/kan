@@ -17,6 +17,7 @@ namespace roo {
     class Setting;
     class Status;
     class Timer;
+    class IoService;
 }
 
 namespace tzrpc {
@@ -59,6 +60,7 @@ public:
     std::shared_ptr<roo::Status> status_ptr_;
     std::shared_ptr<roo::Timer> timer_ptr_;
 
+    std::shared_ptr<roo::IoService> io_service_ptr_;
 
     std::shared_ptr<RaftConsensus> raft_consensus_ptr_;
 };

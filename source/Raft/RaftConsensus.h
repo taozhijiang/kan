@@ -91,11 +91,11 @@ private:
 
     // 处理Peer发过来的RPC请求
     int do_process_request_vote_request(const Raft::RequestVoteOps::Request& request,
-                                       Raft::RequestVoteOps::Response& response);
+                                        Raft::RequestVoteOps::Response& response);
     int do_process_append_entries_request(const Raft::AppendEntriesOps::Request& request,
-                                         Raft::AppendEntriesOps::Response& response);
+                                          Raft::AppendEntriesOps::Response& response);
     int do_process_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
-                                           Raft::InstallSnapshotOps::Response& response);
+                                            Raft::InstallSnapshotOps::Response& response);
 
     // Leader检查cluster的日志状态
     // 当日志复制到绝大多数节点(next_index)的时候，就将其确认为提交的

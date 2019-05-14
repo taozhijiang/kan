@@ -196,9 +196,9 @@ uint64_t RaftConsensus::current_leader() const {
 
 std::shared_ptr<Peer> RaftConsensus::get_peer(uint64_t peer_id) const {
     auto peer = peer_set_.find(peer_id);
-    if(peer == peer_set_.end()) {
+    if (peer == peer_set_.end()) {
         roo::log_err("Request peer_id %lu is not in peer_set!", peer_id);
-        return {};
+        return{ };
     }
 
     return peer->second;
@@ -274,7 +274,7 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
 // 响应请求
 //
 int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::Request& request,
-                                                  Raft::RequestVoteOps::Response& response) {
+                                                   Raft::RequestVoteOps::Response& response) {
 
     response.set_peer_id(context_->id());
 
@@ -326,7 +326,7 @@ int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::R
 }
 
 int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOps::Request& request,
-                                                    Raft::AppendEntriesOps::Response& response) {
+                                                     Raft::AppendEntriesOps::Response& response) {
 
     response.set_peer_id(option_.id_);
     response.set_term(context_->term());
@@ -425,7 +425,7 @@ int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOp
 }
 
 int RaftConsensus::do_process_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
-                                                      Raft::InstallSnapshotOps::Response& response) {
+                                                       Raft::InstallSnapshotOps::Response& response) {
 
     response.set_peer_id(option_.id_);
 

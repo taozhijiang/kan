@@ -15,6 +15,7 @@
 #include <Network/NetServer.h>
 
 #include <concurrency/Timer.h>
+#include <concurrency/IoService.h>
 
 #include <scaffold/Setting.h>
 #include <scaffold/Status.h>
@@ -93,6 +94,13 @@ bool Captain::init(const std::string& cfgFile) {
         roo::log_err("init NetServer failed!");
         return false;
     }
+
+    io_service_ptr_ = std::make_shared<roo::IoService>();
+    if(!io_service_ptr_ || !io_service_ptr_->init()) {
+        roo::log_err("create and initialize IoService failed.");
+        return false;
+    }
+
 
     // 先注册具体的服务
     // 这里的初始化是调用服务实现侧的初始化函数，意味着要完成配置读取等操作

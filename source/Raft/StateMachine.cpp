@@ -27,7 +27,7 @@ StateMachine::StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<Sto
     apply_notify_(),
     main_executor_stop_(false) {
 
-    if(!log_meta_ || !kv_store)
+    if (!log_meta_ || !kv_store)
         throw roo::ConstructException("invalid log_meta and kv_store provided.");
 }
 

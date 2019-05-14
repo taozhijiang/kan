@@ -197,22 +197,22 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
     uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
     if (leader_id != 0) {
         roo::log_warning("The leader is %lu, will atomaticlly forward this request", leader_id);
-        
+
         auto client = Captain::instance().raft_consensus_ptr_->get_peer(leader_id);
-        if(!client) {
+        if (!client) {
             roo::log_err("Peer (of Leader) %lu not found!", leader_id);
             rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
             return;
         }
 
-        std::string proxy_response_str {};
+        std::string proxy_response_str{};
         int code = client->proxy_client_RPC(rpc_request_message.header_.service_id,
-                                            rpc_request_message.header_.opcode, 
+                                            rpc_request_message.header_.opcode,
                                             rpc_request_message.payload_,
                                             proxy_response_str);
-        if(code != 0) {
-            roo::log_err("Forward client request from %lu to %lu failed with %d",  
-            Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
+        if (code != 0) {
+            roo::log_err("Forward client request from %lu to %lu failed with %d",
+                         Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
             rpc_instance->reject(RpcResponseStatus::REQUEST_PROXY_ERROR);
             return;
         }
@@ -256,22 +256,22 @@ void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance
     uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
     if (leader_id != 0) {
         roo::log_warning("The leader is %lu, will atomaticlly forward this request", leader_id);
-        
+
         auto client = Captain::instance().raft_consensus_ptr_->get_peer(leader_id);
-        if(!client) {
+        if (!client) {
             roo::log_err("Peer (of Leader) %lu not found!", leader_id);
             rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
             return;
         }
 
-        std::string proxy_response_str {};
+        std::string proxy_response_str{};
         int code = client->proxy_client_RPC(rpc_request_message.header_.service_id,
-                                            rpc_request_message.header_.opcode, 
+                                            rpc_request_message.header_.opcode,
                                             rpc_request_message.payload_,
                                             proxy_response_str);
-        if(code != 0) {
-            roo::log_err("Forward client request from %lu to %lu failed with %d",  
-            Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
+        if (code != 0) {
+            roo::log_err("Forward client request from %lu to %lu failed with %d",
+                         Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
             rpc_instance->reject(RpcResponseStatus::REQUEST_PROXY_ERROR);
             return;
         }
@@ -279,7 +279,7 @@ void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance
         rpc_instance->reply_rpc_message(proxy_response_str);
         return;
     }
-    
+
     if (Captain::instance().raft_consensus_ptr_->current_leader() != 0) {
         roo::log_warning("Bad, The leader is %lu", Captain::instance().raft_consensus_ptr_->current_leader());
         rpc_instance->reject(RpcResponseStatus::NOT_LEADER);
