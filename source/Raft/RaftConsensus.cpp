@@ -1,3 +1,10 @@
+/*-
+ * Copyright (c) 2019 TAO Zhijiang<taozhijiang@gmail.com>
+ *
+ * Licensed under the BSD-3-Clause license, see LICENSE for full information.
+ *
+ */
+
 #include <concurrency/Timer.h>
 #include <scaffold/Setting.h>
 #include <other/Log.h>
@@ -5,9 +12,10 @@
 #include <other/FilesystemUtil.h>
 
 #include <Protocol/Common.h>
-#include <Raft/LevelDBLog.h>
 
+#include <Raft/LevelDBLog.h>
 #include <Raft/Clock.h>
+#include <Raft/LevelDBStore.h>
 
 #include <Captain.h>
 
@@ -102,9 +110,9 @@ bool RaftConsensus::init() {
         return false;
     }
 
-    kv_store_ = make_unique<KVStore>(option_.log_path_ + "/kv_store");
+    kv_store_ = make_unique<LevelDBStore>(option_.log_path_ + "/kv_store");
     if (!kv_store_) {
-        roo::log_err("create kv_store_ failed.");
+        roo::log_err("create kv_store_ of LevelDBStore failed.");
         return false;
     }
 
@@ -183,6 +191,7 @@ uint64_t RaftConsensus::current_leader() {
 
 
 int RaftConsensus::state_machine_modify(const std::string& cmd) {
+
     if (cmd.empty()) {
         roo::log_err("empty cmd info.");
         return -1;
@@ -193,8 +202,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd) {
         return -1;
     }
 
-
-    // 创建空的追加日志RPC
+    // 创建附带状态机变更指令的业务日志RPC
     LogIf::EntryPtr entry = std::make_shared<LogIf::Entry>();
     entry->set_term(context_->term());
     entry->set_type(Raft::EntryType::kNormal);
@@ -202,7 +210,6 @@ int RaftConsensus::state_machine_modify(const std::string& cmd) {
     auto idx = log_meta_->append({ entry });
 
     send_append_entries();
-
     return 0;
 }
 
@@ -227,21 +234,21 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
             roo::log_err("unmarshal response failed.");
             return -1;
         }
-        return do_handle_request_vote_callback(response);
+        return do_continue_request_vote_async(response);
     } else if (opcode == static_cast<uint16_t>(OpCode::kAppendEntries)) {
         Raft::AppendEntriesOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(rsp, &response)) {
             roo::log_err("unmarshal response failed.");
             return -1;
         }
-        return do_handle_append_entries_callback(response);
+        return do_continue_append_entries_async(response);
     } else if (opcode == static_cast<uint16_t>(OpCode::kInstallSnapshot)) {
         Raft::InstallSnapshotOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(rsp, &response)) {
             roo::log_err("unmarshal response failed.");
             return -1;
         }
-        return do_handle_install_snapshot_callback(response);
+        return do_continue_install_snapshot_async(response);
     }
 
     roo::log_err("unexpected rpc call response with opcode %u", opcode);
@@ -252,7 +259,7 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
 //
 // 响应请求
 //
-int RaftConsensus::do_handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
+int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::Request& request,
                                                   Raft::RequestVoteOps::Response& response) {
 
     response.set_peer_id(context_->id());
@@ -304,7 +311,7 @@ int RaftConsensus::do_handle_request_vote_request(const Raft::RequestVoteOps::Re
     return 0;
 }
 
-int RaftConsensus::do_handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
+int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOps::Request& request,
                                                     Raft::AppendEntriesOps::Response& response) {
 
     response.set_peer_id(option_.id_);
@@ -403,7 +410,7 @@ int RaftConsensus::do_handle_append_entries_request(const Raft::AppendEntriesOps
     return 0;
 }
 
-int RaftConsensus::do_handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
+int RaftConsensus::do_process_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
                                                       Raft::InstallSnapshotOps::Response& response) {
 
     response.set_peer_id(option_.id_);
@@ -414,7 +421,7 @@ int RaftConsensus::do_handle_install_snapshot_request(const Raft::InstallSnapsho
 
 
 
-int RaftConsensus::do_handle_request_vote_callback(const Raft::RequestVoteOps::Response& response) {
+int RaftConsensus::do_continue_request_vote_async(const Raft::RequestVoteOps::Response& response) {
 
     // 如果发现更大的term返回，则回退到follower
     if (response.term() > context_->term()) {
@@ -498,7 +505,7 @@ uint64_t RaftConsensus::advance_commit_index() {
     return values.at((peer_set_.size() + 1 - 1) / 2);
 }
 
-int RaftConsensus::do_handle_append_entries_callback(const Raft::AppendEntriesOps::Response& response) {
+int RaftConsensus::do_continue_append_entries_async(const Raft::AppendEntriesOps::Response& response) {
 
     // 如果发现更大的term返回，则回退到follower
     if (response.term() > context_->term()) {
@@ -576,7 +583,7 @@ int RaftConsensus::do_handle_append_entries_callback(const Raft::AppendEntriesOp
 }
 
 
-int RaftConsensus::do_handle_install_snapshot_callback(const Raft::InstallSnapshotOps::Response& response) {
+int RaftConsensus::do_continue_install_snapshot_async(const Raft::InstallSnapshotOps::Response& response) {
 
     return 0;
 }

@@ -166,11 +166,11 @@ void ClientService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc_instance->get_opcode()) {
-        case OpCode::kRead:
-            client_read_impl(rpc_instance);
+        case OpCode::kSelect:
+            client_select_impl(rpc_instance);
             break;
-        case OpCode::kWrite:
-            client_write_impl(rpc_instance);
+        case OpCode::kUpdate:
+            client_update_impl(rpc_instance);
             break;
 
         default:
@@ -182,61 +182,48 @@ void ClientService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 }
 
 
-void ClientService::client_read_impl(std::shared_ptr<RpcInstance> rpc_instance) {
+void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kRead) {
+    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kSelect) {
         roo::log_err("invalid opcode %u in service Client.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-
-    sisyphus::Client::StateMachineReadOps::Request  request;
-    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
-        roo::log_err("unmarshal request failed.");
-        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
-        return;
-    }
-
-    // 考虑Legacy读？
+    // 考虑Legacy读优化性能？
     if (Captain::instance().raft_consensus_ptr_->current_leader() != 0) {
         roo::log_warning("Bad, The leader is %lu", Captain::instance().raft_consensus_ptr_->current_leader());
         rpc_instance->reject(RpcResponseStatus::NOT_LEADER);
         return;
     }
 
-    std::string val;
-    int ret = Captain::instance().raft_consensus_ptr_->kv_store_->get(request.key(), val);
-    if (ret != 0) {
-        roo::log_err("handle kv_get %s return %d", request.key().c_str(), ret);
-        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+    sisyphus::Client::StateMachineSelectOps::Request  request;
+    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
+        roo::log_err("unmarshal request failed.");
+        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Client::StateMachineReadOps::Response response;
-    response.set_val(val);
-    response.set_code(0);
-    response.set_msg("OK");
+    sisyphus::Client::StateMachineSelectOps::Response response;
+    int ret = Captain::instance().raft_consensus_ptr_->kv_store_->select_handle(request, response);
+    if (ret != 0) {
+        roo::log_err("handle StateMachineSelectOps return %d", ret);
+        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+        return;
+    }
 
     std::string response_str;
     roo::ProtoBuf::marshalling_to_string(response, &response_str);
     rpc_instance->reply_rpc_message(response_str);
 }
 
-void ClientService::client_write_impl(std::shared_ptr<RpcInstance> rpc_instance) {
+// 该接口是异步处理的，Raft将其创建为日志处理
+void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kWrite) {
+    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kUpdate) {
         roo::log_err("invalid opcode %u in service Client.", rpc_request_message.header_.opcode);
-        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
-        return;
-    }
-
-    // 尝试解码，但是不使用结果
-    sisyphus::Client::StateMachineWriteOps::Request  request;
-    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
-        roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
@@ -248,16 +235,16 @@ void ClientService::client_write_impl(std::shared_ptr<RpcInstance> rpc_instance)
         return;
     }
 
-    // 尝试创建日志
+    // 尝试创建日志，其内容是protobuf序列化的字符串，状态机需要解析处理
     int ret = Captain::instance().raft_consensus_ptr_->state_machine_modify(rpc_request_message.payload_);
     if (ret != 0) {
-        roo::log_err("handle append_entries return %d", ret);
+        roo::log_err("handle Raft append_entries return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
         return;
     }
 
     // 返回异步处理成功
-    sisyphus::Client::StateMachineWriteOps::Response response;
+    sisyphus::Client::StateMachineUpdateOps::Response response;
     response.set_code(0);
     response.set_msg("OK");
 

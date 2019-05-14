@@ -1,3 +1,10 @@
+/*-
+ * Copyright (c) 2019 TAO Zhijiang<taozhijiang@gmail.com>
+ *
+ * Licensed under the BSD-3-Clause license, see LICENSE for full information.
+ *
+ */
+
 #ifndef __RAFT_STATE_MACHINE__
 #define __RAFT_STATE_MACHINE__
 
@@ -8,7 +15,7 @@
 #include <thread>
 
 #include <Raft/LogIf.h>
-#include <Raft/KVStore.h>
+#include <Raft/StoreIf.h>
 
 // 简易的KV存储支撑
 
@@ -20,7 +27,7 @@ class StateMachine {
 
 public:
 
-    StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<KVStore>& kv_store);
+    StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store);
     ~StateMachine() = default;
 
     bool init();
@@ -33,7 +40,7 @@ private:
     int do_apply(LogIf::EntryPtr entry);
 
     std::unique_ptr<LogIf>& log_meta_;
-    std::unique_ptr<KVStore>& kv_store_;
+    std::unique_ptr<StoreIf>& kv_store_;
 
     // 其下一条就是要执行的指令，初始化值为0
     uint64_t commit_index_;

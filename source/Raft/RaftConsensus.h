@@ -1,3 +1,11 @@
+/*-
+ * Copyright (c) 2019 TAO Zhijiang<taozhijiang@gmail.com>
+ *
+ * Licensed under the BSD-3-Clause license, see LICENSE for full information.
+ *
+ */
+
+
 #ifndef __RAFT_RAFT_CONSENSUS_H__
 #define __RAFT_RAFT_CONSENSUS_H__
 
@@ -15,7 +23,7 @@
 #include <Raft/Option.h>
 #include <Raft/Clock.h>
 #include <Raft/StateMachine.h>
-#include <Raft/KVStore.h>
+#include <Raft/StoreIf.h>
 
 #include <Client/include/RpcClientStatus.h>
 
@@ -74,16 +82,16 @@ public:
 private:
 
     // 处理异步客户端收到的Peer回调
-    int do_handle_request_vote_callback(const Raft::RequestVoteOps::Response& response);
-    int do_handle_append_entries_callback(const Raft::AppendEntriesOps::Response& response);
-    int do_handle_install_snapshot_callback(const Raft::InstallSnapshotOps::Response& response);
+    int do_continue_request_vote_async(const Raft::RequestVoteOps::Response& response);
+    int do_continue_append_entries_async(const Raft::AppendEntriesOps::Response& response);
+    int do_continue_install_snapshot_async(const Raft::InstallSnapshotOps::Response& response);
 
     // 处理Peer发过来的RPC请求
-    int do_handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
+    int do_process_request_vote_request(const Raft::RequestVoteOps::Request& request,
                                        Raft::RequestVoteOps::Response& response);
-    int do_handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
+    int do_process_append_entries_request(const Raft::AppendEntriesOps::Request& request,
                                          Raft::AppendEntriesOps::Response& response);
-    int do_handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
+    int do_process_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
                                            Raft::InstallSnapshotOps::Response& response);
 
     // Leader检查cluster的日志状态
@@ -122,7 +130,7 @@ private:
     std::thread main_thread_;
 
     std::unique_ptr<StateMachine> state_machine_;
-    std::unique_ptr<KVStore>      kv_store_;
+    std::unique_ptr<StoreIf>      kv_store_;
 };
 
 } // namespace sisyphus

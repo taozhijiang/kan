@@ -58,8 +58,8 @@ private:
 private:
 
     ////////// RPC handlers //////////
-    void client_read_impl(std::shared_ptr<RpcInstance> rpc_instance);
-    void client_write_impl(std::shared_ptr<RpcInstance> rpc_instance);
+    void client_select_impl(std::shared_ptr<RpcInstance> rpc_instance);
+    void client_update_impl(std::shared_ptr<RpcInstance> rpc_instance);
 
     const std::string instance_name_;
 

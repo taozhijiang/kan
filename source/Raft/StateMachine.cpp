@@ -1,6 +1,14 @@
+/*-
+ * Copyright (c) 2019 TAO Zhijiang<taozhijiang@gmail.com>
+ *
+ * Licensed under the BSD-3-Clause license, see LICENSE for full information.
+ *
+ */
+
 #include <other/Log.h>
 
-#include <Raft/LogIf.h>
+#include <Raft/LevelDBLog.h>
+#include <Raft/LevelDBStore.h>
 #include <Raft/StateMachine.h>
 
 #include <message/ProtoBuf.h>
@@ -8,7 +16,7 @@
 
 namespace sisyphus {
 
-StateMachine::StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<KVStore>& kv_store) :
+StateMachine::StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store) :
     log_meta_(log_meta),
     kv_store_(kv_store),
     commit_index_(0),
@@ -83,15 +91,13 @@ int StateMachine::do_apply(LogIf::EntryPtr entry) {
 
     std::string instruction = entry->data();
 
-    sisyphus::Client::StateMachineWriteOps::Request request;
+    sisyphus::Client::StateMachineUpdateOps::Request request;
     if (!roo::ProtoBuf::unmarshalling_from_string(instruction, &request)) {
         roo::log_err("unmarshal StateMachineWriteOps Request failed.");
         return -1;
     }
 
-    std::string key = request.key();
-    std::string val = request.val();
-    return kv_store_->set(key, val);
+    return kv_store_->update_handle(request);
 }
 
 
