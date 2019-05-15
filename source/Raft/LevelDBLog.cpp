@@ -10,6 +10,7 @@
 
 #include <system/ConstructException.h>
 #include <other/Log.h>
+#include <string/StrUtil.h>
 #include <string/Endian.h>
 
 #include <Raft/LevelDBLog.h>
@@ -40,7 +41,7 @@ LevelDBLog::LevelDBLog(const std::string& path) :
 
     if (!status.ok()) {
         roo::log_err("Open levelDB %s failed.", log_meta_path_.c_str());
-        throw roo::ConstructException("open leveldb failed.");
+        throw roo::ConstructException("Open levelDB failed.");
     }
 
     log_meta_fp_.reset(db);
@@ -52,7 +53,7 @@ LevelDBLog::LevelDBLog(const std::string& path) :
         std::string key = it->key().ToString();
         if (key.find("META_") != std::string::npos) {
             start_index_ = Endian::uint64_from_net(key);
-            roo::log_debug("seek found start_index_ %lu", start_index_);
+            roo::log_debug("Try seek and found start_index with %lu.", start_index_);
         }
     }
 
@@ -67,12 +68,14 @@ LevelDBLog::LevelDBLog(const std::string& path) :
         }
 
         last_index_ = Endian::uint64_from_net(key);
-        roo::log_debug("seek found last_index_ %lu", last_index_);
+        roo::log_debug("Try seek and found last_index %lu.", last_index_);
         break;
     }
 
-    if (last_index_ != 0 && last_index_ < start_index_)
-        throw roo::ConstructException("Invalid start_index_ and last_index_ detect.");
+    if (last_index_ != 0 && last_index_ < start_index_) {
+        std::string message = roo::va_format("Invalid start_index %lu and last_index %lu", start_index_, last_index_);
+        throw roo::ConstructException(message.c_str());
+    }
 }
 
 LevelDBLog::~LevelDBLog() {
@@ -94,7 +97,7 @@ LevelDBLog::append(const std::vector<EntryPtr>& newEntries) {
 
     leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
     if (!status.ok()) {
-        roo::log_err("Append log failed.");
+        roo::log_err("Append log failed, affected entries size: %lu.", newEntries.size());
         last_index_ -= newEntries.size();
     }
 
@@ -106,7 +109,7 @@ LevelDBLog::EntryPtr LevelDBLog::entry(uint64_t index) const {
     std::string val;
     leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), Endian::uint64_to_net(index), &val);
     if (!status.ok()) {
-        roo::log_err("read %lu failed.", index);
+        roo::log_err("Read entry at index %lu failed.", index);
         return EntryPtr();
     }
 
@@ -131,7 +134,7 @@ bool LevelDBLog::entries(uint64_t start, std::vector<EntryPtr>& entries) const {
         std::string val;
         leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), Endian::uint64_to_net(start), &val);
         if (!status.ok()) {
-            roo::log_err("read %lu failed.", start);
+            roo::log_err("Read entries at index %lu failed.", start);
             return false;
         }
 
@@ -169,7 +172,7 @@ void LevelDBLog::truncate_prefix(uint64_t start_index) {
 
     leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
     if (!status.ok()) {
-        roo::log_err("truncate_prefix log failed.");
+        roo::log_err("TruncatePrefix log entries from index %lu failed.", start_index);
     }
 
 }
@@ -188,7 +191,7 @@ void LevelDBLog::truncate_suffix(uint64_t last_index) {
 
     leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
     if (!status.ok()) {
-        roo::log_err("truncate_suffix log failed.");
+        roo::log_err("TruncateSuffix log entries from index %lu failed.", last_index);
     }
 }
 
@@ -232,7 +235,10 @@ int LevelDBLog::set_meta_data(const LogMeta& meta) const {
 
     leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
     if (!status.ok()) {
-        roo::log_err("update_meta_data write failed");
+        roo::log_err("Update Meta data failed.");
+        roo::log_err("info: %s %lu, %s %lu, %s %lu, %s %lu.",
+                     META_CURRENT_TERM, meta.current_term(), META_VOTED_FOR, meta.voted_for(),
+                     META_COMMIT_INDEX, meta.commit_index(), META_APPLY_INDEX, meta.apply_index());
         return -1;
     }
 
@@ -261,18 +267,20 @@ uint64_t LevelDBLog::meta_apply_index() const {
 }
 
 int LevelDBLog::set_meta_commit_index(uint64_t commit_index) const {
-    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_COMMIT_INDEX, Endian::uint64_to_net(commit_index));
+    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(),
+                                               META_COMMIT_INDEX, Endian::uint64_to_net(commit_index));
     if (!status.ok()) {
-        roo::log_err("set %s meta failed.", META_COMMIT_INDEX);
+        roo::log_err("Update Meta set %s = %lu failed.", META_COMMIT_INDEX, commit_index);
         return -1;
     }
     return 0;
 }
 
 int LevelDBLog::set_meta_apply_index(uint64_t apply_index) const {
-    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(), META_APPLY_INDEX, Endian::uint64_to_net(apply_index));
+    leveldb::Status status = log_meta_fp_->Put(leveldb::WriteOptions(),
+                                               META_APPLY_INDEX, Endian::uint64_to_net(apply_index));
     if (!status.ok()) {
-        roo::log_err("set %s meta failed.", META_APPLY_INDEX);
+        roo::log_err("Update Meta set %s = %lu failed.", META_APPLY_INDEX, apply_index);
         return -1;
     }
     return 0;

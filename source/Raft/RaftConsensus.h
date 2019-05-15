@@ -132,6 +132,7 @@ private:
     bool main_thread_stop_;
     std::thread main_thread_;
 
+    // 状态机处理模块，机器对应的LevelDB底层存储模块
     std::unique_ptr<StateMachine> state_machine_;
     std::unique_ptr<StoreIf>      kv_store_;
 };

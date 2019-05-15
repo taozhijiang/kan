@@ -31,7 +31,7 @@ Context::Context(uint64_t id, std::unique_ptr<LogIf>& log_meta) :
 void Context::become_follower(uint64_t term) {
 
     if (term_ < term) {
-        roo::log_warning("stepdown node from term %lu to %lu", term_, term);
+        roo::log_warning("Stepdown Node %lu from term %lu to %lu", id_, term_, term);
         term_ = term;
         leader_id_ = 0;
         voted_for_ = 0;

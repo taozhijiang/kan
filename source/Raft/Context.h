@@ -19,7 +19,7 @@ enum class Role : uint8_t {
 };
 
 static inline std::string RoleStr(enum Role role) {
-    return (role == Role::kLeader ? "Leader" : role == Role::kFollower ? "Follower" : "Candidate");
+    return (role == Role::kLeader ? "LEADER" : role == Role::kFollower ? "FOLLOWER" : "CANDIDATE");
 }
 
 

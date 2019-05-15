@@ -30,7 +30,7 @@ LevelDBStore::LevelDBStore(const std::string& path) :
 
     if (!status.ok()) {
         roo::log_err("Open levelDB %s failed.", kv_path_.c_str());
-        throw roo::ConstructException("open leveldb failed.");
+        throw roo::ConstructException("Open levelDB failed.");
     }
 
     kv_fp_.reset(db);
@@ -53,7 +53,7 @@ int LevelDBStore::select_handle(const Client::StateMachineSelectOps::Request& re
             if (get(request.read().key(), content) == 0) {
                 response.mutable_read()->set_content(content);
             } else {
-                roo::log_err("read %s failed.", request.read().key().c_str());
+                roo::log_err("Read key %s failed.", request.read().key().c_str());
                 result = -1;
             }
             break;
@@ -66,7 +66,7 @@ int LevelDBStore::select_handle(const Client::StateMachineSelectOps::Request& re
             uint64_t limit          = request.range().limit();
             result = range(start_key, end_key, limit, range_store);
             if (result != 0) {
-                roo::log_err("range for %s, %s, %lu failed.", start_key.c_str(), end_key.c_str(), limit);
+                roo::log_err("Rang for key start %s, end %s, limit %lu failed.", start_key.c_str(), end_key.c_str(), limit);
                 break;
             }
 
@@ -81,7 +81,7 @@ int LevelDBStore::select_handle(const Client::StateMachineSelectOps::Request& re
             uint64_t limit = request.search().limit();
             result = search(search_key, limit, search_store);
             if (result != 0) {
-                roo::log_err("search for %s, %lu failed.", search_key.c_str(), limit);
+                roo::log_err("Search for key %s, limit %lu failed.", search_key.c_str(), limit);
                 break;
             }
 
@@ -91,7 +91,7 @@ int LevelDBStore::select_handle(const Client::StateMachineSelectOps::Request& re
 
         }
 
-        roo::log_err("Unknown operations for StateMachineSelectOps");
+        roo::log_err("Unknown operations for StateMachineSelectOps.");
         result = -1;
 
     } while (0);
@@ -117,7 +117,7 @@ int LevelDBStore::update_handle(const Client::StateMachineUpdateOps::Request& re
         if (set(request.write().key(), request.write().content()) == 0)
             return 0;
 
-        roo::log_err("write %s with %s failed.", request.write().key().c_str(), request.write().content().c_str());
+        roo::log_err("Write %s = %s failed.", request.write().key().c_str(), request.write().content().c_str());
         return -1;
 
 
@@ -128,13 +128,13 @@ int LevelDBStore::update_handle(const Client::StateMachineUpdateOps::Request& re
         if (del(request.remove().key()) == 0)
             return 0;
 
-        roo::log_err("del %s failed.", request.remove().key().c_str());
+        roo::log_err("Delete key %s failed.", request.remove().key().c_str());
         return -1;
 
     }
 
 
-    roo::log_err("Unknown operations for StateMachineUpdateOps");
+    roo::log_err("Unknown operations for StateMachineUpdateOps.");
     return -1;
 }
 

@@ -36,7 +36,7 @@ public:
     std::string str() const {
 
         std::stringstream ss;
-        ss  << "peer info: " << std::endl
+        ss  << "Peer Info: " << std::endl
             << "    id: " << id_ << std::endl
             << "    addr&port: " << addr_ << " " << port_ << std::endl
             << "    next_index: " << next_index_ << std::endl

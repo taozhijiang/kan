@@ -36,19 +36,18 @@ Peer::Peer(uint64_t id,
     setting.io_service_ = Captain::instance().io_service_ptr_->io_service_ptr();
     rpc_proxy_  = make_unique<RpcClient>(setting);
 
-    // add handler_ for async call
+    // add handler_ for async call use
     setting.handler_ = handler_;
     rpc_client_ = make_unique<RpcClient>(setting);
 
     if (!rpc_client_ || !rpc_proxy_)
-        throw roo::ConstructException("create Peer RpClient failed.");
+        throw roo::ConstructException("Create RpClient failed.");
 }
 
 int Peer::send_raft_RPC(uint16_t service_id, uint16_t opcode, const std::string& payload) const {
     RpcClientStatus status = rpc_client_->call_RPC(service_id, opcode, payload);
     return status == RpcClientStatus::OK ? 0 : -1;
 }
-
 
 
 int Peer::proxy_client_RPC(uint16_t service_id, uint16_t opcode,
