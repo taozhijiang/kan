@@ -21,6 +21,13 @@
 
 namespace sisyphus {
 
+
+enum class SnapshotProgress: uint8_t {
+    kBegin      = 1,
+    kProcessing = 2,
+    kDone       = 3,
+};
+
 class StateMachine {
 
     __noncopyable__(StateMachine)
@@ -35,6 +42,9 @@ public:
     void notify_state_machine() { apply_notify_.notify_all(); }
     void state_machine_loop();
 
+    bool create_snapshot();
+    bool load_snapshot();
+
 private:
 
     int do_apply(LogIf::EntryPtr entry);
@@ -46,7 +56,9 @@ private:
     uint64_t commit_index_;
     uint64_t apply_index_;
 
-    std::mutex lock_;
+    // 是否正在执行快照操作
+    SnapshotProgress snapshot_progress_;
+    std::mutex apply_mutex_;
     std::condition_variable apply_notify_;
 
     bool main_executor_stop_;

@@ -10,6 +10,7 @@
 #include <leveldb/comparator.h>
 
 #include <other/Log.h>
+#include <other/FilesystemUtil.h>
 #include <message/ProtoBuf.h>
 
 #include <Raft/LevelDBStore.h>
@@ -18,8 +19,9 @@
 namespace sisyphus {
 
 
-LevelDBStore::LevelDBStore(const std::string& path) :
-    kv_path_(path),
+LevelDBStore::LevelDBStore(const std::string& db_path, const std::string& snapshot_path) :
+    kv_path_(db_path),
+    snapshot_path_(snapshot_path),
     kv_fp_() {
 
     leveldb::Options options;
@@ -34,6 +36,15 @@ LevelDBStore::LevelDBStore(const std::string& path) :
     }
 
     kv_fp_.reset(db);
+
+    roo::FilesystemUtil::mkdir(snapshot_path_);
+
+    // 检查快照目录是否存在，不存在则创建之
+    if (!roo::FilesystemUtil::accessable(snapshot_path_, R_OK | W_OK | X_OK) ||
+        !roo::FilesystemUtil::is_directory(snapshot_path_)) {
+        std::string msg = "Prepare snapshot directory failed: " + snapshot_path_;
+        throw roo::ConstructException(msg.c_str());
+    }
 }
 
 LevelDBStore::~LevelDBStore() {
@@ -141,6 +152,8 @@ int LevelDBStore::update_handle(const Client::StateMachineUpdateOps::Request& re
 
 int LevelDBStore::get(const std::string& key, std::string& val) const {
 
+    boost::shared_lock<boost::shared_mutex> rlock(kv_lock_);
+
     leveldb::Status status = kv_fp_->Get(leveldb::ReadOptions(), key, &val);
     if (status.ok()) return 0;
 
@@ -149,6 +162,8 @@ int LevelDBStore::get(const std::string& key, std::string& val) const {
 
 
 int LevelDBStore::set(const std::string& key, const std::string& val) const {
+
+    boost::unique_lock<boost::shared_mutex> wlock(kv_lock_);
 
     leveldb::WriteOptions options;
     options.sync = true;
@@ -160,6 +175,8 @@ int LevelDBStore::set(const std::string& key, const std::string& val) const {
 }
 
 int LevelDBStore::del(const std::string& key) const {
+
+    boost::unique_lock<boost::shared_mutex> wlock(kv_lock_);
 
     leveldb::WriteOptions options;
     options.sync = true;
@@ -174,6 +191,8 @@ int LevelDBStore::del(const std::string& key) const {
 int LevelDBStore::range(const std::string& start, const std::string& end, uint64_t limit,
                         std::vector<std::string>& range_store) const {
 
+    boost::shared_lock<boost::shared_mutex> rlock(kv_lock_);
+    
     std::unique_ptr<leveldb::Iterator> it(kv_fp_->NewIterator(leveldb::ReadOptions()));
     uint64_t count = 0;
     leveldb::Options options;
@@ -208,6 +227,7 @@ int LevelDBStore::range(const std::string& start, const std::string& end, uint64
 int LevelDBStore::search(const std::string& search_key, uint64_t limit,
                          std::vector<std::string>& search_store) const {
 
+    boost::shared_lock<boost::shared_mutex> rlock(kv_lock_);
 
     std::unique_ptr<leveldb::Iterator> it(kv_fp_->NewIterator(leveldb::ReadOptions()));
     uint64_t count = 0;
@@ -232,5 +252,109 @@ int LevelDBStore::search(const std::string& search_key, uint64_t limit,
 
     return 0;
 }
+
+// 任何时候操作的临时文件
+static const std::string snapshot_temp_file = "state_machine_snapshot.temp";
+
+// 服务本地创建的快照文件
+static const std::string snapshot_self_file = "state_machine_snapshot.self";
+
+// 服务接受到的远程Leader的快照文件
+static const std::string snapshot_recv_file = "state_machine_snapshot.recv";
+
+bool LevelDBStore::create_snapshot(uint64_t last_included_index, uint64_t last_included_term) const {
+
+    Snapshot::SnapshotContent snapshot {};
+    snapshot.mutable_meta()->set_last_included_index(last_included_index);
+    snapshot.mutable_meta()->set_last_included_term(last_included_term);
+
+    google::protobuf::RepeatedPtrField<Snapshot::KeyValue>& snapshot_item = *snapshot.mutable_data();
+
+    boost::shared_lock<boost::shared_mutex> rlock(kv_lock_);
+
+    std::unique_ptr<leveldb::Iterator> it(kv_fp_->NewIterator(leveldb::ReadOptions()));
+    uint64_t count = 0;
+
+    for (it->SeekToFirst(); it->Valid(); it->Next()) {
+
+        leveldb::Slice key = it->key();
+        leveldb::Slice value = it->value();
+
+        snapshot_item.Add()->set_key(key.ToString());
+        snapshot_item.Add()->set_value(value.ToString());
+
+        ++ count;
+    }
+
+    std::string content;
+    if(!roo::ProtoBuf::marshalling_to_string(snapshot, &content)) {
+        roo::log_err("marshalling_to_string of snapshot failed.");
+        return -1;
+    }
+
+    std::string full_tmp = snapshot_path_ + snapshot_temp_file;
+    if(roo::FilesystemUtil::write_file(full_tmp, content) == 0){
+        roo::log_warning("snapshot %lu count item, dump to %s successfully!", count, full_tmp.c_str());
+
+        // 正式文件
+        std::string self_full = snapshot_path_ + snapshot_self_file;
+        ::rename(full_tmp.c_str(), self_full.c_str());
+        roo::log_warning("commit to official snapshot file: %s", self_full.c_str());
+        return 0;
+    }
+
+    return -1;
+
+}
+
+bool LevelDBStore::load_snapshot(uint64_t& last_included_index, uint64_t& last_included_term) {
+
+    Snapshot::SnapshotContent snapshot {};
+    boost::unique_lock<boost::shared_mutex> wlock(kv_lock_);
+
+    // destroy levelDB completely first
+    leveldb::DestroyDB(kv_path_, leveldb::Options());
+    kv_fp_.reset();
+
+    leveldb::Options create_options;
+    create_options.error_if_exists = true;
+    leveldb::DB* db;
+    leveldb::Status status = leveldb::DB::Open(create_options, kv_path_, &db);
+
+    if (!status.ok()) {
+        PANIC("Reset LevelDB error: %s", kv_path_.c_str());
+    }
+    kv_fp_.reset(db);
+
+    std::string content;
+    std::string recv_full = snapshot_path_ + snapshot_recv_file;
+    if(roo::FilesystemUtil::read_file(recv_full, content) != 0) {
+        roo::log_err("Read content failed from %s.", recv_full.c_str());
+        return -1;
+    }
+
+    if(!roo::ProtoBuf::unmarshalling_from_string(content, &snapshot)) {
+        roo::log_err("marshalling_to_string of snapshot failed.");
+        return -1;
+    }
+
+    last_included_index = snapshot.meta().last_included_index();
+    last_included_term  = snapshot.meta().last_included_term();
+
+    leveldb::WriteBatch batch;
+    for (auto iter = snapshot.data().begin(); iter != snapshot.data().end(); ++iter) {
+        batch.Put(iter->key(), iter->value());
+    }
+
+    status = kv_fp_->Write(leveldb::WriteOptions(), &batch);
+    if (!status.ok()) {
+        roo::log_err("Restoring snapshot failed, give up...");
+        return false;
+    }
+
+    return true;
+}
+
+
 
 } // namespace sisyphus

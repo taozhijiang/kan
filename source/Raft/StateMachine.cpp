@@ -23,7 +23,8 @@ StateMachine::StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<Sto
     kv_store_(kv_store),
     commit_index_(0),
     apply_index_(0),
-    lock_(),
+    snapshot_progress_(SnapshotProgress::kDone),
+    apply_mutex_(),
     apply_notify_(),
     main_executor_stop_(false) {
 
@@ -52,7 +53,7 @@ void StateMachine::state_machine_loop() {
     while (!main_executor_stop_) {
 
         {
-            std::unique_lock<std::mutex> lock(lock_);
+            std::unique_lock<std::mutex> lock(apply_mutex_);
             auto expire_tp = std::chrono::system_clock::now() + std::chrono::seconds(5);
 
 #if __cplusplus >= 201103L
@@ -60,6 +61,14 @@ void StateMachine::state_machine_loop() {
 #else
             apply_notify_.wait_until(lock, expire_tp);
 #endif
+        }
+
+        if(snapshot_progress_ == SnapshotProgress::kBegin) 
+            snapshot_progress_ = SnapshotProgress::kProcessing;
+        
+        if(snapshot_progress_ == SnapshotProgress::kProcessing) {
+            roo::log_info("Snapshot is processing ...");
+            continue;
         }
 
         commit_index_ = log_meta_->meta_commit_index();
@@ -85,7 +94,7 @@ void StateMachine::state_machine_loop() {
         }
 
         // step forward apply_index
-        ++apply_index_;
+        ++ apply_index_;
         log_meta_->set_meta_apply_index(apply_index_);
     }
 
@@ -106,5 +115,42 @@ int StateMachine::do_apply(LogIf::EntryPtr entry) {
     return kv_store_->update_handle(request);
 }
 
+
+bool StateMachine::create_snapshot() {
+    
+    snapshot_progress_ = SnapshotProgress::kBegin;
+    while(snapshot_progress_ != SnapshotProgress::kProcessing) {
+        ::usleep(100);
+    }
+
+    roo::log_warning("Begin to create snapshot ...");
+    if(apply_index_ == 0) {
+        roo::log_warning("StateMachine is initially state, give up.");
+        snapshot_progress_ = SnapshotProgress::kDone;
+        return true;
+    }
+
+    auto entry = log_meta_->entry(apply_index_);
+    if(!entry) {
+        roo::log_err("Get entry at %lu failed.", apply_index_);
+        snapshot_progress_ = SnapshotProgress::kDone;
+        return false;
+    }
+
+    return kv_store_->create_snapshot(apply_index_, entry->term());
+}
+
+bool StateMachine::load_snapshot() {
+    
+    snapshot_progress_ = SnapshotProgress::kBegin;
+    while(snapshot_progress_ != SnapshotProgress::kProcessing) {
+        ::usleep(100);
+    }
+
+    roo::log_warning("Begin to load snapshot ...");
+    uint64_t last_included_index = 0;
+    uint64_t last_included_term  = 0;
+    return kv_store_->load_snapshot(last_included_index, last_included_term);
+}
 
 } // namespace

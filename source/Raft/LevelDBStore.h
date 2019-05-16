@@ -11,8 +11,13 @@
 #include <xtra_rhel.h>
 #include <leveldb/db.h>
 
+#include <boost/thread/locks.hpp>    
+#include <boost/thread/shared_mutex.hpp>    
+
 #include <Raft/StoreIf.h>
 #include <system/ConstructException.h>
+
+#include <Protocol/gen-cpp/Snapshot.pb.h>
 
 
 // 用来进行实际业务数据存储的LevelDB实例
@@ -22,12 +27,19 @@ namespace sisyphus {
 class LevelDBStore : public StoreIf {
 
 public:
-    explicit LevelDBStore(const std::string& path);
+    explicit LevelDBStore(const std::string& db_path, const std::string& snapshot_path);
     ~LevelDBStore();
 
     int select_handle(const Client::StateMachineSelectOps::Request& request,
                       Client::StateMachineSelectOps::Response& response) const override;
     int update_handle(const Client::StateMachineUpdateOps::Request& request) const override;
+
+    // 创建和加载状态机快照的时候，会持有锁结构，所以所有的请求将会被阻塞
+    // 上层对业务友好的话，可以同步这种快照创建和恢复中的信息
+
+    // 创建状态机快照，先写临时文件，如果成功了再将临时文件重命名为正式文件
+    bool create_snapshot(uint64_t last_included_index, uint64_t last_included_term) const override;
+    bool load_snapshot(uint64_t& last_included_index, uint64_t& last_included_term) override;
 
 private:
 
@@ -42,7 +54,10 @@ private:
 
 protected:
     const std::string kv_path_;
+    const std::string snapshot_path_;
     std::unique_ptr<leveldb::DB> kv_fp_;
+
+    mutable boost::shared_mutex kv_lock_;
 };
 
 } // namespace sisyphus

@@ -115,7 +115,7 @@ bool RaftConsensus::init() {
         return false;
     }
 
-    kv_store_ = make_unique<LevelDBStore>(option_.log_path_ + "/kv_store");
+    kv_store_ = make_unique<LevelDBStore>(option_.log_path_ + "/kv_store", option_.log_path_ + "/snapshot/");
     if (!kv_store_) {
         roo::log_err("Create LevelDBStore handle failed.");
         return false;
@@ -176,14 +176,6 @@ bool RaftConsensus::init() {
 
     // 主工作线程
     main_thread_ = std::thread(std::bind(&RaftConsensus::main_thread_loop, this));
-
-    // 系统主循环的周期性驱动
-    if (!Captain::instance().timer_ptr_->add_timer(
-            std::bind(&Clock::step, std::placeholders::_1),
-            Clock::tick_step(), true)) {
-        roo::log_err("Create main tick timer failed.");
-        return false;
-    }
 
     // 启动选取定时器
     context_->become_follower(context_->term());
@@ -762,7 +754,13 @@ void RaftConsensus::main_thread_loop() {
 
         {
             std::unique_lock<std::mutex> lock(consensus_mutex_);
-            concensus_notify_.wait(lock);
+                        
+            auto expire_tp = steady_clock::now() + std::chrono::milliseconds(100);
+#if __cplusplus >= 201103L
+            concensus_notify_.wait_until(lock, expire_tp);
+#else
+            concensus_notify_.wait_until(lock, expire_tp);
+#endif
         }
 
         switch (context_->role()) {

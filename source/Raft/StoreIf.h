@@ -32,6 +32,8 @@ public:
     // 状态机执行日志的时候使用
     virtual int update_handle(const Client::StateMachineUpdateOps::Request& request) const = 0;
 
+    virtual bool create_snapshot(uint64_t last_included_index, uint64_t last_included_term) const = 0;
+    virtual bool load_snapshot(uint64_t& last_included_index, uint64_t& last_included_term) = 0;
 };
 
 } // namespace sisyphus
