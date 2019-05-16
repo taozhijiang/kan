@@ -40,7 +40,9 @@ enum class RpcClientStatus : uint8_t {
 
     REQUEST_PROXY_ERROR = 7, // 非Leader节点转发客户端请求失败
 
-    // 以上部分是和服务端相互兼容的
+    // 同时被定义在  <RPC/RpcResponseMessage.h>
+    // 以上部分是和服务端相互兼容的，客户端和服务端必须同时改动
+    
 
     // 未发送网络请求，客户端可以考虑重发
     NETWORK_BEFORE_ERROR  = 10,

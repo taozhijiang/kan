@@ -46,7 +46,7 @@ private:
     ~Captain() {
         // Singleton should not destoried normally,
         // if happens, just terminate quickly
-        ::exit(0);
+        ::exit(EXIT_SUCCESS);
     }
 
 
