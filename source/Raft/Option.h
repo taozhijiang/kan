@@ -11,6 +11,8 @@
 #include <xtra_rhel.h>
 #include <other/Log.h>
 
+#include <Raft/Clock.h>
+
 // Raft相关的配置参数
 
 namespace sisyphus {
@@ -27,10 +29,11 @@ struct Option {
     std::map<uint64_t, std::pair<std::string, uint16_t>> members_;
 
     // 心跳发送周期
-    uint64_t    heartbeat_tick_;
+    duration    heartbeat_ms_;
     // 选举超时定时
-    uint64_t    election_timeout_tick_;
-    uint64_t    withhold_votes_tick_;
+    duration    election_timeout_ms_;
+    // 优化，如果发现在选举超时时间内获得了其他Leader的信息，则拒绝此次投票
+    duration    withhold_votes_ms_;
 
     // 限制一次RPC中log能够传输的最大数量，0表示没有限制
     uint64_t    log_trans_count_;
@@ -39,9 +42,9 @@ struct Option {
     Option() :
         bootstrap_(false),
         id_(0),
-        heartbeat_tick_(0),
-        election_timeout_tick_(0),
-        withhold_votes_tick_(0),
+        heartbeat_ms_(0),
+        election_timeout_ms_(0),
+        withhold_votes_ms_(0),
         log_trans_count_(0) { }
 
     ~Option() = default;
@@ -58,9 +61,9 @@ struct Option {
         if (log_path_.empty())
             return false;
 
-        if (heartbeat_tick_ == 0 || election_timeout_tick_ == 0 ||
-            withhold_votes_tick_ == 0 ||
-            heartbeat_tick_ >= election_timeout_tick_)
+        if (heartbeat_ms_.count() == 0 || election_timeout_ms_.count() == 0 ||
+            withhold_votes_ms_.count() == 0 ||
+            heartbeat_ms_.count() >= election_timeout_ms_.count())
             return false;
 
         return true;
@@ -73,9 +76,9 @@ struct Option {
             << "    id: " << id_ << std::endl
             << "    members: " << members_str_ << std::endl
             << "    log_path: " << log_path_ << std::endl
-            << "    heartbeat_tick_: " << heartbeat_tick_ << std::endl
-            << "    election_timeout_tick: " << election_timeout_tick_ << std::endl
-            << "    withhold_votes_tick: " << withhold_votes_tick_ << std::endl
+            << "    heartbeat_ms_: " << heartbeat_ms_.count() << std::endl
+            << "    election_timeout_tick: " << election_timeout_ms_.count() << std::endl
+            << "    withhold_votes_tick: " << withhold_votes_ms_.count() << std::endl
         ;
 
         return ss.str();

@@ -35,9 +35,13 @@ bool RaftConsensus::init() {
     setting_ptr->lookupValue("Raft.bootstrap", option_.bootstrap_);
     setting_ptr->lookupValue("Raft.server_id", option_.id_);
     setting_ptr->lookupValue("Raft.storage_prefix", option_.log_path_);
-    setting_ptr->lookupValue("Raft.heartbeat_tick", option_.heartbeat_tick_);
-    setting_ptr->lookupValue("Raft.election_timeout_tick", option_.election_timeout_tick_);
 
+    uint64_t heartbeat_ms;
+    uint64_t election_timeout_ms;
+    setting_ptr->lookupValue("Raft.heartbeat_ms", heartbeat_ms);
+    setting_ptr->lookupValue("Raft.election_timeout_ms", election_timeout_ms);
+    option_.heartbeat_ms_ = duration(heartbeat_ms);
+    option_.election_timeout_ms_ = duration(election_timeout_ms);
 
     // if not found, will throw exceptions
     const libconfig::Setting& peers = setting_ptr->lookup("Raft.cluster_peers");
@@ -66,16 +70,16 @@ bool RaftConsensus::init() {
         option_.members_str_ += roo::StrUtil::to_string(id) + ">" + addr + ":" + roo::StrUtil::to_string(port) + ",";
     }
 
-    option_.withhold_votes_tick_ = option_.election_timeout_tick_;
+    option_.withhold_votes_ms_ = option_.election_timeout_ms_;
     if (!option_.validate()) {
         roo::log_err("Validate raft option failed, please check the configuration file!");
-        roo::log_err("Current setting dump: %s", option_.str().c_str());
         return false;
     }
+    roo::log_info("Current setting dump for node %lu:\n %s", option_.id_, option_.str().c_str());
 
     // 随机化选取超时定时器
-    if (option_.election_timeout_tick_ > 3)
-        option_.election_timeout_tick_ += ::random() % (option_.election_timeout_tick_ / 3);
+    if (option_.election_timeout_ms_.count() > 3)
+        option_.election_timeout_ms_ += duration( ::random() % (option_.election_timeout_ms_.count() / 3));
 
     // 初始化 peer_map_ 的主机列表
     for (auto iter = option_.members_.begin(); iter != option_.members_.end(); ++iter) {
@@ -172,7 +176,7 @@ bool RaftConsensus::init() {
     // 主工作线程
     main_thread_ = std::thread(std::bind(&RaftConsensus::main_thread_loop, this));
 
-    // 系统的时钟ticket
+    // 系统主循环的周期性驱动
     if (!Captain::instance().timer_ptr_->add_timer(
             std::bind(&Clock::step, std::placeholders::_1),
             Clock::tick_step(), true)) {
@@ -290,7 +294,7 @@ int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::R
 
     // 节点在选取超时内接收到另外一个Leader的AppendEntries，则拒绝本轮的选取请求
     // 这样可以避免某些Peer自身的原因导致意外的选主请求
-    if (withhold_votes_timer_.within(option_.withhold_votes_tick_)) {
+    if (withhold_votes_timer_.within(option_.withhold_votes_ms_)) {
         roo::log_warning("RequestVote reject, because this node heard anthor leader AppendEntries within ElectionTimeout ...");
         response.set_term(context_->term());
         response.set_vote_granted(false);
@@ -519,7 +523,7 @@ int RaftConsensus::do_continue_request_vote_async(const Raft::RequestVoteOps::Re
 
 
 // 当日志被复制到绝大多数节点上的时候，我们就将其设置为已提交的状态
-uint64_t RaftConsensus::advance_commit_index() {
+uint64_t RaftConsensus::advance_commit_index() const {
 
     std::vector<uint64_t> values{};
     for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter)
@@ -739,13 +743,13 @@ void RaftConsensus::main_thread_loop() {
     while (!main_thread_stop_) {
 
         {
-            std::unique_lock<std::mutex> lock(main_mutex_);
-            main_notify_.wait(lock);
+            std::unique_lock<std::mutex> lock(consensus_mutex_);
+            concensus_notify_.wait(lock);
         }
 
         switch (context_->role()) {
             case Role::kFollower:
-                if (election_timer_.timeout(option_.election_timeout_tick_)) {
+                if (election_timer_.timeout(option_.election_timeout_ms_)) {
                     roo::log_warning("Node %lu begin to request vote from Follower ...", context_->id());
                     context_->become_candidate();
                     send_request_vote();
@@ -754,7 +758,7 @@ void RaftConsensus::main_thread_loop() {
                 break;
 
             case Role::kCandidate:
-                if (election_timer_.timeout(option_.election_timeout_tick_)) {
+                if (election_timer_.timeout(option_.election_timeout_ms_)) {
                     roo::log_warning("Node %lu begin to request vote from Candidate ...", context_->id());
                     context_->become_candidate();
                     send_request_vote();
@@ -763,7 +767,7 @@ void RaftConsensus::main_thread_loop() {
                 break;
 
             case Role::kLeader:
-                if (heartbeat_timer_.timeout(option_.heartbeat_tick_)) {
+                if (heartbeat_timer_.timeout(option_.heartbeat_ms_)) {
                     send_append_entries();
                 }
                 break;

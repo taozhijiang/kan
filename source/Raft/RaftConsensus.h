@@ -99,7 +99,7 @@ private:
 
     // Leader检查cluster的日志状态
     // 当日志复制到绝大多数节点(next_index)的时候，就将其确认为提交的
-    uint64_t advance_commit_index();
+    uint64_t advance_commit_index() const;
 
     int send_request_vote();
     int send_append_entries();
@@ -111,6 +111,8 @@ private:
 private:
 
     // 实例的全局互斥保护
+    // 因为涉及到的模块比较多，所以该锁是一个模块全局性的大锁
+    // 另外，锁的特性是不可重入的，所以要避免死锁
     std::mutex consensus_mutex_;
 
     // Timer
@@ -127,8 +129,7 @@ private:
     Option option_;
     std::unique_ptr<Context> context_;
 
-    std::mutex main_mutex_;
-    std::condition_variable main_notify_;
+    std::condition_variable concensus_notify_;
     bool main_thread_stop_;
     std::thread main_thread_;
 

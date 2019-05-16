@@ -20,10 +20,8 @@ volatile uint64_t Clock::current_ = 0;
 
 void Clock::step(const boost::system::error_code& ec) {
 
-    ++current_;
-
     // 驱动RaftConsensus中的主循环进行状态和定时器的检查
-    Captain::instance().raft_consensus_ptr_->main_notify_.notify_all();
+    Captain::instance().raft_consensus_ptr_->concensus_notify_.notify_all();
 }
 
 
