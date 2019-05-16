@@ -118,7 +118,7 @@ LevelDBLog::EntryPtr LevelDBLog::entry(uint64_t index) const {
     return entry;
 }
 
-bool LevelDBLog::entries(uint64_t start, std::vector<EntryPtr>& entries) const {
+bool LevelDBLog::entries(uint64_t start, std::vector<EntryPtr>& entries, uint64_t limit) const {
 
     std::lock_guard<std::mutex> lock(log_mutex_);
 
@@ -130,6 +130,7 @@ bool LevelDBLog::entries(uint64_t start, std::vector<EntryPtr>& entries) const {
         return true;
     }
 
+    uint64_t count = 0;
     for (; start <= last_index_; ++start) {
         std::string val;
         leveldb::Status status = log_meta_fp_->Get(leveldb::ReadOptions(), Endian::uint64_to_net(start), &val);
@@ -141,6 +142,9 @@ bool LevelDBLog::entries(uint64_t start, std::vector<EntryPtr>& entries) const {
         EntryPtr entry = std::make_shared<Entry>();
         entry->ParseFromString(val);
         entries.emplace_back(entry);
+
+        if(limit != 0 && ++count > limit)
+            break;
     }
 
     return true;

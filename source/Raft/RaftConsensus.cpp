@@ -35,6 +35,7 @@ bool RaftConsensus::init() {
     setting_ptr->lookupValue("Raft.bootstrap", option_.bootstrap_);
     setting_ptr->lookupValue("Raft.server_id", option_.id_);
     setting_ptr->lookupValue("Raft.storage_prefix", option_.log_path_);
+    setting_ptr->lookupValue("Raft.log_trans_count", option_.log_trans_count_);
 
     uint64_t heartbeat_ms;
     uint64_t election_timeout_ms;
@@ -233,7 +234,9 @@ int RaftConsensus::state_machine_modify(const std::string& cmd) {
     entry->set_data(cmd);
     auto idx = log_meta_->append({ entry });
 
-    send_append_entries();
+    heartbeat_timer_.set_urgent();
+    concensus_notify_.notify_all();
+    // send_append_entries();
     return 0;
 }
 
@@ -286,6 +289,8 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
 int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::Request& request,
                                                    Raft::RequestVoteOps::Response& response) {
 
+    std::lock_guard<std::mutex> lock(consensus_mutex_);
+
     response.set_peer_id(context_->id());
 
     auto last_entry_term_index = log_meta_->last_term_and_index();
@@ -337,6 +342,8 @@ int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::R
 
 int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOps::Request& request,
                                                      Raft::AppendEntriesOps::Response& response) {
+
+    std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     response.set_peer_id(option_.id_);
     response.set_term(context_->term());
@@ -438,6 +445,8 @@ int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOp
 
 int RaftConsensus::do_process_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
                                                        Raft::InstallSnapshotOps::Response& response) {
+    
+    std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     response.set_peer_id(option_.id_);
     roo::log_err("NOT IMPLEMENTED YET!");
@@ -448,6 +457,8 @@ int RaftConsensus::do_process_install_snapshot_request(const Raft::InstallSnapsh
 
 
 int RaftConsensus::do_continue_request_vote_async(const Raft::RequestVoteOps::Response& response) {
+
+    std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     // 如果发现更大的term返回，则回退到follower
     if (response.term() > context_->term()) {
@@ -501,7 +512,9 @@ int RaftConsensus::do_continue_request_vote_async(const Raft::RequestVoteOps::Re
                 heartbeat_timer_.schedule();
 
                 // 调度，根据Peer的next_index来发送
-                send_append_entries();
+                heartbeat_timer_.set_urgent();
+                concensus_notify_.notify_all();
+                // send_append_entries();
 
                 roo::log_warning("Node %lu now has been leader.", context_->id());
 
@@ -523,6 +536,7 @@ int RaftConsensus::do_continue_request_vote_async(const Raft::RequestVoteOps::Re
 
 
 // 当日志被复制到绝大多数节点上的时候，我们就将其设置为已提交的状态
+// 这边就是根据每个Peer的match_index来尝试算出最新的commit_index
 uint64_t RaftConsensus::advance_commit_index() const {
 
     std::vector<uint64_t> values{};
@@ -536,6 +550,8 @@ uint64_t RaftConsensus::advance_commit_index() const {
 }
 
 int RaftConsensus::do_continue_append_entries_async(const Raft::AppendEntriesOps::Response& response) {
+
+    std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     // 如果发现更大的term返回，则回退到follower
     if (response.term() > context_->term()) {
@@ -635,6 +651,8 @@ int RaftConsensus::do_continue_append_entries_async(const Raft::AppendEntriesOps
 
 int RaftConsensus::do_continue_install_snapshot_async(const Raft::InstallSnapshotOps::Response& response) {
 
+    std::lock_guard<std::mutex> lock(consensus_mutex_);
+
     roo::log_err("NOT IMPLEMENTED YET!");
     return 0;
 }
@@ -708,7 +726,7 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
 
     // 可以为空，此时为纯粹的心跳
     // TODO: 限制每次发送的日志条目数
-    if (!log_meta_->entries(peer.next_index(), entries)) {
+    if (!log_meta_->entries(peer.next_index(), entries, option_.log_trans_count_)) {
         roo::log_err("Get entries from %lu from index %lu failed.", peer.id(), prev_log_index);
         return -1;
     }
@@ -751,6 +769,9 @@ void RaftConsensus::main_thread_loop() {
             case Role::kFollower:
                 if (election_timer_.timeout(option_.election_timeout_ms_)) {
                     roo::log_warning("Node %lu begin to request vote from Follower ...", context_->id());
+
+                    std::lock_guard<std::mutex> lock(consensus_mutex_);
+
                     context_->become_candidate();
                     send_request_vote();
                     election_timer_.schedule();
@@ -760,6 +781,9 @@ void RaftConsensus::main_thread_loop() {
             case Role::kCandidate:
                 if (election_timer_.timeout(option_.election_timeout_ms_)) {
                     roo::log_warning("Node %lu begin to request vote from Candidate ...", context_->id());
+
+                    std::lock_guard<std::mutex> lock(consensus_mutex_);
+
                     context_->become_candidate();
                     send_request_vote();
                     election_timer_.schedule();
@@ -768,6 +792,9 @@ void RaftConsensus::main_thread_loop() {
 
             case Role::kLeader:
                 if (heartbeat_timer_.timeout(option_.heartbeat_ms_)) {
+
+                    std::lock_guard<std::mutex> lock(consensus_mutex_);
+
                     send_append_entries();
                 }
                 break;

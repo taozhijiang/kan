@@ -50,10 +50,16 @@ class SimpleTimer {
 public:
     explicit SimpleTimer() :
         enable_(false),
+        immediate_(false),
         start_(steady_clock::now()) {
     }
 
-    bool timeout(duration count_ms) const {
+    bool timeout(duration count_ms) {
+        if (enable_ && immediate_) {
+            immediate_ = false;
+            return true;
+        }
+
         if (enable_)
             return start_ + count_ms < steady_clock::now();
 
@@ -61,7 +67,12 @@ public:
     }
 
     // 是否在某个时间范围内，这边在投票优化的时候用到
-    bool within(duration count_ms) const {
+    bool within(duration count_ms) {
+        if (enable_ && immediate_) {
+            immediate_ = false;
+            return true;
+        }
+
         if (enable_)
             return start_ + count_ms > steady_clock::now();
 
@@ -78,8 +89,15 @@ public:
         enable_ = false;
     }
 
+    void set_urgent() {
+        immediate_ = true;
+    }
+
 private:
     bool enable_;
+
+    // 用于立即触发事件发生，使用timeout或者within函数后，该标志会重置
+    bool immediate_;
     time_point start_;
 };
 

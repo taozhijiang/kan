@@ -63,7 +63,9 @@ struct Option {
 
         if (heartbeat_ms_.count() == 0 || election_timeout_ms_.count() == 0 ||
             withhold_votes_ms_.count() == 0 ||
-            heartbeat_ms_.count() >= election_timeout_ms_.count())
+            heartbeat_ms_.count() >= election_timeout_ms_.count() ||
+            heartbeat_ms_.count() <= 100 ||
+            withhold_votes_ms_.count() <= 100 )
             return false;
 
         return true;
@@ -76,9 +78,10 @@ struct Option {
             << "    id: " << id_ << std::endl
             << "    members: " << members_str_ << std::endl
             << "    log_path: " << log_path_ << std::endl
-            << "    heartbeat_ms_: " << heartbeat_ms_.count() << std::endl
-            << "    election_timeout_tick: " << election_timeout_ms_.count() << std::endl
-            << "    withhold_votes_tick: " << withhold_votes_ms_.count() << std::endl
+            << "    heartbeat_ms: " << heartbeat_ms_.count() << std::endl
+            << "    election_timeout_ms: " << election_timeout_ms_.count() << std::endl
+            << "    withhold_votes_ms: " << withhold_votes_ms_.count() << std::endl
+            << "    log_trans_count: " << log_trans_count_ << std::endl
         ;
 
         return ss.str();

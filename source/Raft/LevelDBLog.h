@@ -29,7 +29,7 @@ public:
     append(const std::vector<EntryPtr>& newEntries)override;
 
     EntryPtr entry(uint64_t index) const override;
-    bool     entries(uint64_t start, std::vector<EntryPtr>& entries) const override;
+    bool     entries(uint64_t start, std::vector<EntryPtr>& entries, uint64_t limit) const override;
     std::pair<uint64_t, uint64_t>
     last_term_and_index() const override;
 

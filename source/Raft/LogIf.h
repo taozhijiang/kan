@@ -37,7 +37,7 @@ public:
     append(const std::vector<EntryPtr>& newEntries) = 0;
 
     virtual EntryPtr entry(uint64_t index) const = 0;
-    virtual bool     entries(uint64_t start, std::vector<EntryPtr>& entries) const = 0;
+    virtual bool     entries(uint64_t start, std::vector<EntryPtr>& entries, uint64_t limit = 0) const = 0;
     virtual std::pair<uint64_t, uint64_t>
     last_term_and_index() const = 0;
 
