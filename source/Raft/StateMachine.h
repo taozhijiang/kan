@@ -51,9 +51,11 @@ public:
 
     uint64_t apply_index() const { return apply_index_; }
 
+    bool fetch_response_msg(uint64_t index, std::string& content);
+
 private:
 
-    int do_apply(LogIf::EntryPtr entry);
+    int do_apply(LogIf::EntryPtr entry, std::string& content_out);
 
     RaftConsensus& raft_consensus_;
     std::unique_ptr<LogIf>& log_meta_;
@@ -68,6 +70,10 @@ private:
     SnapshotProgress snapshot_progress_;
     std::mutex apply_mutex_;
     std::condition_variable apply_notify_;
+
+    // 保存状态机的执行结果
+    std::mutex apply_rsp_mutex_;
+    std::map<uint16_t, std::string> apply_rsp_;
 
     bool main_executor_stop_;
     std::thread main_executor_;

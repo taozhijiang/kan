@@ -29,6 +29,8 @@ StateMachine::StateMachine(RaftConsensus& raft_consensus,
     snapshot_progress_(SnapshotProgress::kDone),
     apply_mutex_(),
     apply_notify_(),
+    apply_rsp_mutex_(),
+    apply_rsp_(),
     main_executor_stop_(false) {
 
     if (!log_meta_ || !kv_store)
@@ -86,11 +88,19 @@ void StateMachine::state_machine_loop() {
 
         LogIf::EntryPtr entry = log_meta_->entry(apply_index_ + 1);
         if (entry->type() == Raft::EntryType::kNoop) {
-            roo::log_info("Skip NOOP type entry at term %lu, current apply_index %lu.", entry->term(), apply_index_);
+            roo::log_info("Skip NOOP type entry at term %lu, current processing apply_index %lu.", 
+                          entry->term(), apply_index_ + 1);
         } else if (entry->type() == Raft::EntryType::kNormal) {
             // 无论成功失败，都前进
-            do_apply(entry);
-            roo::log_info("Applied Normal type entry at term %lu, current apply_index %lu.", entry->term(), apply_index_);
+            std::string content;
+            if(do_apply(entry, content) == 0) {
+                if(!content.empty()) {
+                    std::lock_guard<std::mutex> lock(apply_rsp_mutex_);
+                    apply_rsp_[apply_index_ + 1] = content;
+                }
+            }
+            roo::log_info("Applied Normal type entry at term %lu, current processing apply_index %lu.", 
+                          entry->term(), apply_index_ + 1);
         } else {
             PANIC("Unhandled entry type %d found at term %lu, apply_index %lu.",
                   static_cast<int>(entry->type()), entry->term(), apply_index_);
@@ -107,7 +117,7 @@ void StateMachine::state_machine_loop() {
 
 
 // do your specific business work here.
-int StateMachine::do_apply(LogIf::EntryPtr entry) {
+int StateMachine::do_apply(LogIf::EntryPtr entry, std::string& content_out) {
 
     std::string instruction = entry->data();
 
@@ -117,7 +127,38 @@ int StateMachine::do_apply(LogIf::EntryPtr entry) {
         return -1;
     }
 
-    return kv_store_->update_handle(request);
+    int ret =  kv_store_->update_handle(request);
+
+    if(ret == 0)
+        content_out = "success at statemachine";
+    else 
+        content_out = "failure at statemachine";
+
+    return ret;
+}
+
+
+bool StateMachine::fetch_response_msg(uint64_t index, std::string& content) {
+
+    std::lock_guard<std::mutex> lock(apply_rsp_mutex_);
+
+    auto iter = apply_rsp_.find(index);
+    if(iter != apply_rsp_.end()) {
+        content = iter->second;
+
+        // 删除掉
+        apply_rsp_.erase(index);
+
+        // 剔除掉部分过于历史的响应
+
+        uint64_t low_limit = apply_index_ < 5001 ? 1 : apply_index_ - 5000;
+        auto low_bound = apply_rsp_.lower_bound(low_limit);
+        apply_rsp_.erase(apply_rsp_.begin(), low_bound);
+        
+        return true;
+    }
+
+    return false;
 }
 
 

@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
 
-        std::cout << "GOOD, get return: " << response.read().content() << std::endl;
+        std::cout << "read return ok with content:" << response.read().content() << std::endl;
 
     } else if (::strncmp(argv[1], "set", 3) == 0) {
 
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
 
-        std::cout << "GOOD, write return ok" << std::endl;
+        std::cout << "write return ok with context:" << response.context() << std::endl;
 
     } else if (::strncmp(argv[1], "del", 3) == 0) {
 
@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
 
-        std::cout << "GOOD, del return ok" << std::endl;
+        std::cout << "delete return ok with context: " << response.context() << std::endl;
 
     } else if (::strncmp(argv[1], "keys", 4) == 0) {
 

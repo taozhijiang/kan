@@ -220,6 +220,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
     }
 
     // 改条请求对应的日志索引
+    uint64_t aim_term  = 0;
     uint64_t aim_index = 0;
 
 {
@@ -230,8 +231,10 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
     entry->set_data(cmd);
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
-    auto idx = log_meta_->append({ entry });
-    aim_index = idx.second;
+    log_meta_->append({ entry });
+    auto term_and_index = log_meta_->last_term_and_index();
+    aim_term  = term_and_index.first;
+    aim_index = term_and_index.second;
 }
     roo::log_info("The request aim for index: %lu", aim_index);
 
@@ -242,6 +245,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
     
 {
     std::unique_lock<std::mutex> lock(consensus_mutex_);
+
     auto expire_tp = steady_clock::now();
     if(option_.raft_distr_timeout_ms_.count() != 0) 
         expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
@@ -250,7 +254,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
 
     // no_timeout wakeup by notify_all, notify_one, or spuriously
     // timeout    wakeup by timeout expiration
-    while (context_->commit_index() < aim_index) {
+    while (context_->commit_index() < aim_index && aim_term == context_->term()) {
 
 #if __cplusplus >= 201103L
         if (concensus_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
@@ -263,6 +267,12 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
 #endif
     }
 
+    // 重新发生了选举操作
+    if(aim_term != context_->term()) {
+        roo::log_err("Term changed when replicate entry, previous %lu, current %lu", aim_term, context_->term());
+        return -1;
+    }
+
     if(context_->commit_index() < aim_index) {
         roo::log_err("replicate entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
         return -1;
@@ -271,6 +281,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
 
 {
     std::unique_lock<std::mutex> lock(consensus_mutex_);
+
     auto expire_tp = steady_clock::now();
     if(option_.raft_distr_timeout_ms_.count() != 0) 
         expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
@@ -297,6 +308,10 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
         return -1;
     }
 }
+
+    std::string content;
+    if(state_machine_->fetch_response_msg(aim_index, content))
+        apply_out = content;
 
     return 0;
 }
