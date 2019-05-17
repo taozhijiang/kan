@@ -76,17 +76,21 @@ message StateMachineUpdateOps {
             required string key         = 1;
             required bytes  content     = 2;
         }
-        optional Write write            = 1;
+        optional Write write            = 5;
 
         message Remove {
             required string key         = 1;
         }
-        optional Remove remove          = 2;
+        optional Remove remove          = 6;
 
     }
 
     message Response {
         required int32  code            = 1;
         required string msg             = 2;
+    
+        // marshal后业务层自己解析处理
+        optional bytes  context         = 5;
+
     }
 }

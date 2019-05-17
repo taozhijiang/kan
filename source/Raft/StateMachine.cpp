@@ -9,6 +9,7 @@
 
 #include <other/Log.h>
 
+#include <Raft/RaftConsensus.h>
 #include <Raft/LevelDBLog.h>
 #include <Raft/LevelDBStore.h>
 #include <Raft/StateMachine.h>
@@ -18,7 +19,9 @@
 
 namespace sisyphus {
 
-StateMachine::StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store) :
+StateMachine::StateMachine(RaftConsensus& raft_consensus, 
+                           std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store) :
+    raft_consensus_(raft_consensus),
     log_meta_(log_meta),
     kv_store_(kv_store),
     commit_index_(0),
@@ -83,11 +86,11 @@ void StateMachine::state_machine_loop() {
 
         LogIf::EntryPtr entry = log_meta_->entry(apply_index_ + 1);
         if (entry->type() == Raft::EntryType::kNoop) {
-            roo::log_info("Skip NOOP type entry at term %lu, apply_index %lu.", entry->term(), apply_index_);
+            roo::log_info("Skip NOOP type entry at term %lu, current apply_index %lu.", entry->term(), apply_index_);
         } else if (entry->type() == Raft::EntryType::kNormal) {
             // 无论成功失败，都前进
             do_apply(entry);
-            roo::log_info("Applied Normal type entry at term %lu, apply_index %lu.", entry->term(), apply_index_);
+            roo::log_info("Applied Normal type entry at term %lu, current apply_index %lu.", entry->term(), apply_index_);
         } else {
             PANIC("Unhandled entry type %d found at term %lu, apply_index %lu.",
                   static_cast<int>(entry->type()), entry->term(), apply_index_);
@@ -96,6 +99,8 @@ void StateMachine::state_machine_loop() {
         // step forward apply_index
         ++ apply_index_;
         log_meta_->set_meta_apply_index(apply_index_);
+
+        raft_consensus_.consensus_notify();
     }
 
 }

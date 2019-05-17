@@ -35,8 +35,12 @@ struct Option {
     // 优化，如果发现在选举超时时间内获得了其他Leader的信息，则拒绝此次投票
     duration    withhold_votes_ms_;
 
+    // 在客户端等待响应的时候，Raft Leader在复制日志、等待状态机的超时时长
+    duration    raft_distr_timeout_ms_;
+
     // 限制一次RPC中log能够传输的最大数量，0表示没有限制
     uint64_t    log_trans_count_;
+
 
 
     Option() :
@@ -45,6 +49,7 @@ struct Option {
         heartbeat_ms_(0),
         election_timeout_ms_(0),
         withhold_votes_ms_(0),
+        raft_distr_timeout_ms_(0),
         log_trans_count_(0) { }
 
     ~Option() = default;
@@ -81,6 +86,7 @@ struct Option {
             << "    heartbeat_ms: " << heartbeat_ms_.count() << std::endl
             << "    election_timeout_ms: " << election_timeout_ms_.count() << std::endl
             << "    withhold_votes_ms: " << withhold_votes_ms_.count() << std::endl
+            << "    raft_distr_timeout_ms: " << raft_distr_timeout_ms_.count() << std::endl
             << "    log_trans_count: " << log_trans_count_ << std::endl
         ;
 

@@ -79,8 +79,9 @@ public:
     uint64_t my_id() const;
     uint64_t current_leader() const;
     std::shared_ptr<Peer> get_peer(uint64_t peer_id) const;
-    int state_machine_modify(const std::string& cmd);
 
+    int state_machine_modify(const std::string& cmd, std::string& apply_out);
+    void consensus_notify() { concensus_notify_.notify_all(); }
 
 private:
 

@@ -287,7 +287,8 @@ void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance
     }
 
     // 尝试创建日志，其内容是protobuf序列化的字符串，状态机需要解析处理
-    int ret = Captain::instance().raft_consensus_ptr_->state_machine_modify(rpc_request_message.payload_);
+    std::string context;
+    int ret = Captain::instance().raft_consensus_ptr_->state_machine_modify(rpc_request_message.payload_, context);
     if (ret != 0) {
         roo::log_err("handle Raft append_entries return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
@@ -298,6 +299,7 @@ void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance
     sisyphus::Client::StateMachineUpdateOps::Response response;
     response.set_code(0);
     response.set_msg("OK");
+    response.set_context(context);
 
     std::string response_str;
     roo::ProtoBuf::marshalling_to_string(response, &response_str);

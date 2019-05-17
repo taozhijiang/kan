@@ -168,7 +168,7 @@ bool RaftConsensus::init() {
     }
 
     // 状态机执行线程
-    state_machine_ = make_unique<StateMachine>(log_meta_, kv_store_);
+    state_machine_ = make_unique<StateMachine>(*this, log_meta_, kv_store_);
     if (!state_machine_ || !state_machine_->init()) {
         roo::log_err("Create and initialize StateMachine failed.");
         return false;
@@ -207,7 +207,7 @@ std::shared_ptr<Peer> RaftConsensus::get_peer(uint64_t peer_id) const {
     return peer->second;
 }
 
-int RaftConsensus::state_machine_modify(const std::string& cmd) {
+int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& apply_out) {
 
     if (cmd.empty()) {
         roo::log_err("StateMachine transfer cmd is empty.");
@@ -219,16 +219,85 @@ int RaftConsensus::state_machine_modify(const std::string& cmd) {
         return -1;
     }
 
+    // 改条请求对应的日志索引
+    uint64_t aim_index = 0;
+
+{
     // 创建附带状态机变更指令的业务日志RPC
     LogIf::EntryPtr entry = std::make_shared<LogIf::Entry>();
     entry->set_term(context_->term());
     entry->set_type(Raft::EntryType::kNormal);
     entry->set_data(cmd);
-    auto idx = log_meta_->append({ entry });
 
+    std::lock_guard<std::mutex> lock(consensus_mutex_);
+    auto idx = log_meta_->append({ entry });
+    aim_index = idx.second;
+}
+    roo::log_info("The request aim for index: %lu", aim_index);
+
+
+    // 设置该标志后，main_loop会紧急调用send_append_entries()
     heartbeat_timer_.set_urgent();
     concensus_notify_.notify_all();
-    // send_append_entries();
+    
+{
+    std::unique_lock<std::mutex> lock(consensus_mutex_);
+    auto expire_tp = steady_clock::now();
+    if(option_.raft_distr_timeout_ms_.count() != 0) 
+        expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
+    else 
+        expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
+
+    // no_timeout wakeup by notify_all, notify_one, or spuriously
+    // timeout    wakeup by timeout expiration
+    while (context_->commit_index() < aim_index) {
+
+#if __cplusplus >= 201103L
+        if (concensus_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+            break;
+        }
+#else
+        if (!concensus_notify_.wait_until(lock, expire_tp)) {
+            break;
+        }
+#endif
+    }
+
+    if(context_->commit_index() < aim_index) {
+        roo::log_err("replicate entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+        return -1;
+    }
+}
+
+{
+    std::unique_lock<std::mutex> lock(consensus_mutex_);
+    auto expire_tp = steady_clock::now();
+    if(option_.raft_distr_timeout_ms_.count() != 0) 
+        expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
+    else 
+        expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
+
+    // no_timeout wakeup by notify_all, notify_one, or spuriously
+    // timeout    wakeup by timeout expiration
+    while (state_machine_->apply_index() < aim_index) {
+
+#if __cplusplus >= 201103L
+        if (concensus_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+            break;
+        }
+#else
+        if (!concensus_notify_.wait_until(lock, expire_tp)) {
+            break;
+        }
+#endif
+    }
+
+    if(state_machine_->apply_index() < aim_index) {
+        roo::log_err("replicate entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+        return -1;
+    }
+}
+
     return 0;
 }
 
@@ -614,6 +683,9 @@ int RaftConsensus::do_continue_append_entries_async(const Raft::AppendEntriesOps
             // 持久化提交索引
             log_meta_->set_meta_commit_index(context_->commit_index());
             state_machine_->notify_state_machine();
+
+            // 通知等待的客户端
+            this->consensus_notify();
         }
 
         return 0;

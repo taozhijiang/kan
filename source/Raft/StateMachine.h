@@ -28,13 +28,17 @@ enum class SnapshotProgress: uint8_t {
     kDone       = 3,
 };
 
+class RaftConsensus;
+
+
 class StateMachine {
 
     __noncopyable__(StateMachine)
 
 public:
 
-    StateMachine(std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store);
+    StateMachine(RaftConsensus& raft_consensus, 
+                 std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store);
     ~StateMachine() = default;
 
     bool init();
@@ -45,12 +49,16 @@ public:
     bool create_snapshot();
     bool load_snapshot();
 
+    uint64_t apply_index() const { return apply_index_; }
+
 private:
 
     int do_apply(LogIf::EntryPtr entry);
 
+    RaftConsensus& raft_consensus_;
     std::unique_ptr<LogIf>& log_meta_;
     std::unique_ptr<StoreIf>& kv_store_;
+
 
     // 其下一条就是要执行的指令，初始化值为0
     uint64_t commit_index_;
