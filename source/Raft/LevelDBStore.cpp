@@ -259,29 +259,27 @@ static const std::string snapshot_temp_file = "state_machine_snapshot.temp";
 // 服务本地创建的快照文件
 static const std::string snapshot_self_file = "state_machine_snapshot.self";
 
-// 服务接受到的远程Leader的快照文件
-static const std::string snapshot_recv_file = "state_machine_snapshot.recv";
 
-bool LevelDBStore::create_snapshot(uint64_t last_included_index, uint64_t last_included_term) const {
+bool LevelDBStore::create_snapshot(uint64_t last_included_index, uint64_t last_included_term) {
 
     Snapshot::SnapshotContent snapshot {};
     snapshot.mutable_meta()->set_last_included_index(last_included_index);
     snapshot.mutable_meta()->set_last_included_term(last_included_term);
-
-    google::protobuf::RepeatedPtrField<Snapshot::KeyValue>& snapshot_item = *snapshot.mutable_data();
 
     boost::shared_lock<boost::shared_mutex> rlock(kv_lock_);
 
     std::unique_ptr<leveldb::Iterator> it(kv_fp_->NewIterator(leveldb::ReadOptions()));
     uint64_t count = 0;
 
+    Snapshot::KeyValue* ptr;
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
 
         leveldb::Slice key = it->key();
         leveldb::Slice value = it->value();
 
-        snapshot_item.Add()->set_key(key.ToString());
-        snapshot_item.Add()->set_value(value.ToString());
+        ptr = snapshot.add_data();
+        ptr->set_key(key.ToString());
+        ptr->set_value(value.ToString());
 
         ++ count;
     }
@@ -289,7 +287,7 @@ bool LevelDBStore::create_snapshot(uint64_t last_included_index, uint64_t last_i
     std::string content;
     if(!roo::ProtoBuf::marshalling_to_string(snapshot, &content)) {
         roo::log_err("marshalling_to_string of snapshot failed.");
-        return -1;
+        return false;
     }
 
     std::string full_tmp = snapshot_path_ + snapshot_temp_file;
@@ -300,16 +298,40 @@ bool LevelDBStore::create_snapshot(uint64_t last_included_index, uint64_t last_i
         std::string self_full = snapshot_path_ + snapshot_self_file;
         ::rename(full_tmp.c_str(), self_full.c_str());
         roo::log_warning("commit to official snapshot file: %s", self_full.c_str());
-        return 0;
+        return true;
     }
-
-    return -1;
-
+    
+    roo::log_err("snapshot write filesystem failed: %s.", full_tmp.c_str());
+    return false;
 }
 
-bool LevelDBStore::load_snapshot(uint64_t& last_included_index, uint64_t& last_included_term) {
 
-    Snapshot::SnapshotContent snapshot {};
+bool LevelDBStore::load_snapshot(std::string& content, uint64_t& last_included_index, uint64_t& last_included_term) {
+
+    Snapshot::SnapshotContent snapshot;
+
+    std::string self_full = snapshot_path_ + snapshot_self_file;
+    if(roo::FilesystemUtil::read_file(self_full, content) != 0) {
+        roo::log_err("Load snapshot content from %s failed.", self_full.c_str());
+        return false;
+    }
+
+    if(!roo::ProtoBuf::unmarshalling_from_string(content, &snapshot)) {
+        roo::log_err("unmarshalling snapshot failed, may content currputed.");
+        return false;
+    }
+
+    last_included_index = snapshot.meta().last_included_index();
+    last_included_term  = snapshot.meta().last_included_term();
+    roo::log_warning("load_snapshot, last_included term %lu and index %lu.",
+                    last_included_term, last_included_index);
+
+    return true;
+}
+
+
+bool LevelDBStore::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
+    
     boost::unique_lock<boost::shared_mutex> wlock(kv_lock_);
 
     // destroy levelDB completely first
@@ -326,20 +348,8 @@ bool LevelDBStore::load_snapshot(uint64_t& last_included_index, uint64_t& last_i
     }
     kv_fp_.reset(db);
 
-    std::string content;
-    std::string recv_full = snapshot_path_ + snapshot_recv_file;
-    if(roo::FilesystemUtil::read_file(recv_full, content) != 0) {
-        roo::log_err("Read content failed from %s.", recv_full.c_str());
-        return -1;
-    }
-
-    if(!roo::ProtoBuf::unmarshalling_from_string(content, &snapshot)) {
-        roo::log_err("marshalling_to_string of snapshot failed.");
-        return -1;
-    }
-
-    last_included_index = snapshot.meta().last_included_index();
-    last_included_term  = snapshot.meta().last_included_term();
+    roo::log_warning("Store will apply_snapshot, last_included term %lu and index %lu.",
+                     snapshot.meta().last_included_index(), snapshot.meta().last_included_term());
 
     leveldb::WriteBatch batch;
     for (auto iter = snapshot.data().begin(); iter != snapshot.data().end(); ++iter) {

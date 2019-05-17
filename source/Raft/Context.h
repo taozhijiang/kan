@@ -59,6 +59,12 @@ public:
 
     void update_meta();
 
+    uint64_t last_included_index() const { return last_included_index_; }
+    uint64_t last_included_term() const { return last_included_term_; }
+
+    void set_last_included_index(uint64_t index) { last_included_index_ = index; }
+    void set_last_included_term(uint64_t index) { last_included_term_ = index; }
+
     std::string str() const;
 
 private:
@@ -77,6 +83,10 @@ private:
     enum Role role_;
 
     uint64_t commit_index_;
+
+    // 快照(日志压缩)相关的，需要和快照文件保持数据一致性
+    uint64_t last_included_index_;
+    uint64_t last_included_term_;
 
 
     friend std::ostream& operator<<(std::ostream& os, const Context& context);

@@ -143,26 +143,25 @@ bool StateMachine::fetch_response_msg(uint64_t index, std::string& content) {
     std::lock_guard<std::mutex> lock(apply_rsp_mutex_);
 
     auto iter = apply_rsp_.find(index);
-    if(iter != apply_rsp_.end()) {
-        content = iter->second;
-
-        // 删除掉
-        apply_rsp_.erase(index);
-
-        // 剔除掉部分过于历史的响应
-
-        uint64_t low_limit = apply_index_ < 5001 ? 1 : apply_index_ - 5000;
-        auto low_bound = apply_rsp_.lower_bound(low_limit);
-        apply_rsp_.erase(apply_rsp_.begin(), low_bound);
+    if(iter == apply_rsp_.end())
+        return false;
         
-        return true;
-    }
+    content = iter->second;
 
-    return false;
+    // 删除掉
+    apply_rsp_.erase(index);
+
+    // 剔除掉部分过于历史的响应
+
+ //   uint64_t low_limit = apply_index_ < 5001 ? 1 : apply_index_ - 5000;
+ //   auto low_bound = apply_rsp_.lower_bound(low_limit);
+ //   apply_rsp_.erase(apply_rsp_.begin(), low_bound);
+
+    return true;
 }
 
 
-bool StateMachine::create_snapshot() {
+bool StateMachine::create_snapshot(uint64_t& last_included_index, uint64_t& last_included_term) {
     
     snapshot_progress_ = SnapshotProgress::kBegin;
     while(snapshot_progress_ != SnapshotProgress::kProcessing) {
@@ -183,10 +182,17 @@ bool StateMachine::create_snapshot() {
         return false;
     }
 
-    return kv_store_->create_snapshot(apply_index_, entry->term());
+    bool result = kv_store_->create_snapshot(apply_index_, entry->term());
+    if(result) {
+        last_included_index = apply_index_;
+        last_included_term  = entry->term();
+    }
+
+    snapshot_progress_ = SnapshotProgress::kDone;
+    return result;
 }
 
-bool StateMachine::load_snapshot() {
+bool StateMachine::load_snapshot(std::string& content, uint64_t& last_included_index, uint64_t& last_included_term) {
     
     snapshot_progress_ = SnapshotProgress::kBegin;
     while(snapshot_progress_ != SnapshotProgress::kProcessing) {
@@ -194,9 +200,24 @@ bool StateMachine::load_snapshot() {
     }
 
     roo::log_warning("Begin to load snapshot ...");
-    uint64_t last_included_index = 0;
-    uint64_t last_included_term  = 0;
-    return kv_store_->load_snapshot(last_included_index, last_included_term);
+    bool result =  kv_store_->load_snapshot(content, last_included_index, last_included_term);
+
+    snapshot_progress_ = SnapshotProgress::kDone;
+    return result;
+}
+
+bool StateMachine::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
+    
+    snapshot_progress_ = SnapshotProgress::kBegin;
+    while(snapshot_progress_ != SnapshotProgress::kProcessing) {
+        ::usleep(100);
+    }
+
+    roo::log_warning("Begin to apply snapshot ...");
+    bool result = kv_store_->apply_snapshot(snapshot);
+
+    snapshot_progress_ = SnapshotProgress::kDone;
+    return result;
 }
 
 } // namespace

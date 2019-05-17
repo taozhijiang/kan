@@ -229,13 +229,29 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
         return;
     }
 
+    
     sisyphus::Client::StateMachineSelectOps::Response response;
-    int ret = Captain::instance().raft_consensus_ptr_->kv_store_->select_handle(request, response);
-    if (ret != 0) {
-        roo::log_err("handle StateMachineSelectOps return %d", ret);
-        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
-        return;
+    // 对于快照特殊处理
+    if(request.has_snapshot()) {
+        int ret = Captain::instance().raft_consensus_ptr_->state_machine_snapshot();
+        if (ret != 0) {
+            roo::log_err("handle StateMachineSelectOps Of Snapshot return %d", ret);
+            rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+            return;
+        }
+
+        response.set_code(0);
+        response.set_msg("OK");
+        
+    } else {
+        int ret = Captain::instance().raft_consensus_ptr_->kv_store_->select_handle(request, response);
+        if (ret != 0) {
+            roo::log_err("handle StateMachineSelectOps return %d", ret);
+            rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+            return;
+        }
     }
+
 
     std::string response_str;
     roo::ProtoBuf::marshalling_to_string(response, &response_str);

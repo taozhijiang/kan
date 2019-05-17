@@ -207,6 +207,21 @@ std::shared_ptr<Peer> RaftConsensus::get_peer(uint64_t peer_id) const {
     return peer->second;
 }
 
+int RaftConsensus::state_machine_snapshot() {
+
+    uint64_t last_included_index = 0;
+    uint64_t last_included_term  = 0;
+
+    if(state_machine_->create_snapshot(last_included_index, last_included_term)){
+        roo::log_warning("Create Snapshot successfully at index %lu, term %lu.", 
+                         last_included_index, last_included_term);
+        return 0;
+    }
+    
+    return -1;
+}
+
+
 int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& apply_out) {
 
     if (cmd.empty()) {
@@ -827,9 +842,23 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
     return 0;
 }
 
+// 发送安装日志的请求只会向特定的节点发送
+int RaftConsensus::send_install_snapshot(const Peer& peer) {
 
-int RaftConsensus::send_install_snapshot() {
+    // 构造请求报文
+    Raft::InstallSnapshotOps::Request request;
+    #if 0
+    request.set_term(context_->term());
+    request.set_leader_id(context_->id());
+    request.set_last_included_index(last_entry_term_index.first);
+    request.set_last_included_index(last_entry_term_index.second);
 
+    roo::log_info("RequestVote RPC, term %lu, candidate_id %lu, last_log_term %lu, last_log_index %lu.",
+                  request.term(), request.candidate_id(), request.last_log_term(), request.last_log_index());
+
+    std::string str_request;
+    roo::ProtoBuf::marshalling_to_string(request, &str_request);
+#endif
     roo::log_err("NOT IMPLEMENTED YET!");
     return -1;
 }

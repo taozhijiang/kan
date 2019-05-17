@@ -64,6 +64,7 @@ message AppendEntriesOps {
     }
 }
 
+// 暂时只支持整个快照一次性发送
 message InstallSnapshotOps {
 
     message Request {
@@ -73,9 +74,7 @@ message InstallSnapshotOps {
         required uint64 last_included_index = 3;
         required uint64 last_included_term = 4;
         
-        required uint64 offset          = 5;
-        required bytes  data            = 6;
-        required bool   done            = 7; // last chunk
+        required bytes  data            = 5;
     }
 
     message Response {

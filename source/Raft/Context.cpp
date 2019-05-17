@@ -86,7 +86,9 @@ std::string Context::str() const {
         << "   term: " << term_ << std::endl
         << "   voted_for: " << voted_for_ << std::endl
         << "   role: " << RoleStr(role_) << std::endl
-        << "   commit_index:" << commit_index_ << std::endl;
+        << "   commit_index:" << commit_index_ << std::endl
+        << "   last_included_index:" << last_included_index_ << std::endl
+        << "   last_included_term:" << last_included_term_ << std::endl;
 
     return ss.str();
 }

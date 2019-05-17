@@ -81,6 +81,7 @@ public:
     std::shared_ptr<Peer> get_peer(uint64_t peer_id) const;
 
     int state_machine_modify(const std::string& cmd, std::string& apply_out);
+    int state_machine_snapshot();
     void consensus_notify() { concensus_notify_.notify_all(); }
 
 private:
@@ -105,7 +106,7 @@ private:
     int send_request_vote();
     int send_append_entries();
     int send_append_entries(const Peer& peer);
-    int send_install_snapshot();
+    int send_install_snapshot(const Peer& peer);
 
     void main_thread_loop();
 

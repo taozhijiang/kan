@@ -21,6 +21,7 @@ static void usage() {
         << "            set <key> <val>" << std::endl
         << "            keys           " << std::endl
         << "            del <key>      " << std::endl
+        << "            snapshot       " << std::endl
         << std::endl;
 
     std::cout << ss.str();
@@ -186,6 +187,38 @@ int main(int argc, char* argv[]) {
             auto k = response.range().contents(i);
             std::cout << " : " << k << std::endl;
         }
+
+    } else if (::strncmp(argv[1], "snapshot", 8) == 0) {
+
+        std::string mar_str;
+        sisyphus::Client::StateMachineSelectOps::Request request;
+        request.mutable_snapshot()->set_hint("snapshot");
+        if (!roo::ProtoBuf::marshalling_to_string(request, &mar_str)) {
+            std::cerr << "marshalling message failed." << std::endl;
+            return -1;
+        }
+
+        std::string resp_str;
+        auto status = client.call_RPC(tzrpc::ServiceID::CLIENT_SERVICE,
+                                      sisyphus::Client::OpCode::kSelect,
+                                      mar_str, resp_str);
+        if (status != RpcClientStatus::OK) {
+            std::cerr << "call failed, return code [" << static_cast<uint8_t>(status) << "]" << std::endl;
+            return -1;
+        }
+
+        sisyphus::Client::StateMachineSelectOps::Response response;
+        if (!roo::ProtoBuf::unmarshalling_from_string(resp_str, &response)) {
+            std::cerr << "unmarshalling message failed." << std::endl;
+            return -1;
+        }
+
+        if (!response.has_code() || response.code() != 0) {
+            std::cerr << "response code check error" << std::endl;
+            return -1;
+        }
+
+        std::cout << "snapshot return ok"<< std::endl;
 
     } else {
         usage();

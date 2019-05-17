@@ -38,6 +38,11 @@ message StateMachineSelectOps {
             optional uint64 limit       = 2;
         }
         optional Search search          = 12;
+
+        message Snapshot {
+            optional string hint        = 1;
+        }
+        optional Snapshot snapshot      = 13;
     }
 
     message Response {
