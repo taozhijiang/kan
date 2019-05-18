@@ -52,6 +52,7 @@ public:
     bool apply_snapshot(const Snapshot::SnapshotContent& snapshot);
 
     uint64_t apply_index() const { return apply_index_; }
+    void set_apply_index(uint64_t index) { apply_index_ = index; }
 
     bool fetch_response_msg(uint64_t index, std::string& content);
 

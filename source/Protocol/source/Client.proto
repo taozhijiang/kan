@@ -69,6 +69,11 @@ message StateMachineSelectOps {
             repeated bytes contents     = 1;
         }
         optional Search search          = 12;
+
+        message Snapshot {
+            optional string hint        = 1;
+        }
+        optional Snapshot snapshot      = 13;
     }
 }
 

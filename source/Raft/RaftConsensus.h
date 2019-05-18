@@ -87,16 +87,16 @@ public:
 private:
 
     // 处理异步客户端收到的Peer回调
-    int do_continue_request_vote_async(const Raft::RequestVoteOps::Response& response);
-    int do_continue_append_entries_async(const Raft::AppendEntriesOps::Response& response);
-    int do_continue_install_snapshot_async(const Raft::InstallSnapshotOps::Response& response);
+    int continue_request_vote_bf_async(const Raft::RequestVoteOps::Response& response);
+    int continue_append_entries_bf_async(const Raft::AppendEntriesOps::Response& response);
+    int continue_install_snapshot_bf_async(const Raft::InstallSnapshotOps::Response& response);
 
     // 处理Peer发过来的RPC请求
-    int do_process_request_vote_request(const Raft::RequestVoteOps::Request& request,
+    int handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
                                         Raft::RequestVoteOps::Response& response);
-    int do_process_append_entries_request(const Raft::AppendEntriesOps::Request& request,
+    int handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
                                           Raft::AppendEntriesOps::Response& response);
-    int do_process_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
+    int handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
                                             Raft::InstallSnapshotOps::Response& response);
 
     // Leader检查cluster的日志状态

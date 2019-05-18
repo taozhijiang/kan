@@ -336,10 +336,16 @@ bool LevelDBStore::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
 
     // destroy levelDB completely first
     leveldb::DestroyDB(kv_path_, leveldb::Options());
+
+ #if 0   
     kv_fp_.reset();
+
+    roo::log_warning("unlink database %s.", kv_path_.c_str());
+    ::rename(kv_path_.c_str(), (kv_path_+".old").c_str());
 
     leveldb::Options create_options;
     create_options.error_if_exists = true;
+    create_options.create_if_missing = true;
     leveldb::DB* db;
     leveldb::Status status = leveldb::DB::Open(create_options, kv_path_, &db);
 
@@ -348,7 +354,9 @@ bool LevelDBStore::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
     }
     kv_fp_.reset(db);
 
-    roo::log_warning("Store will apply_snapshot, last_included term %lu and index %lu.",
+#endif
+
+    roo::log_warning("Store will apply_snapshot, last_included index %lu and term %lu.",
                      snapshot.meta().last_included_index(), snapshot.meta().last_included_term());
 
     leveldb::WriteBatch batch;
@@ -356,11 +364,13 @@ bool LevelDBStore::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
         batch.Put(iter->key(), iter->value());
     }
 
-    status = kv_fp_->Write(leveldb::WriteOptions(), &batch);
+    leveldb::Status status = kv_fp_->Write(leveldb::WriteOptions(), &batch);
     if (!status.ok()) {
         roo::log_err("Restoring snapshot failed, give up...");
         return false;
     }
+
+    // 回滚 kv_path_.old ??
 
     return true;
 }

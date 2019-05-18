@@ -218,7 +218,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
 
-        std::cout << "snapshot return ok"<< std::endl;
+        std::cout << "snapshot return ok with hint: " << response.snapshot().hint() << std::endl;
 
     } else {
         usage();

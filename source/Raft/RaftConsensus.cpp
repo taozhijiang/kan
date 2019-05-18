@@ -207,18 +207,34 @@ std::shared_ptr<Peer> RaftConsensus::get_peer(uint64_t peer_id) const {
     return peer->second;
 }
 
+// 不能持锁，否则快照时间过长会导致各种定时器超时
 int RaftConsensus::state_machine_snapshot() {
 
     uint64_t last_included_index = 0;
     uint64_t last_included_term  = 0;
 
-    if(state_machine_->create_snapshot(last_included_index, last_included_term)){
-        roo::log_warning("Create Snapshot successfully at index %lu, term %lu.", 
-                         last_included_index, last_included_term);
-        return 0;
+    if(!state_machine_->create_snapshot(last_included_index, last_included_term)){
+        roo::log_err("Create Snapshot failed.");
+        return -1;
     }
     
-    return -1;
+    roo::log_warning("Create Snapshot successfully at index %lu, term %lu.", 
+                    last_included_index, last_included_term);
+
+    // 更新context_
+    {
+        std::unique_lock<std::mutex> lock(consensus_mutex_);
+
+        context_->set_last_included_index(last_included_index);
+        context_->set_last_included_term(last_included_term);
+
+        // trim日志优化
+        roo::log_warning("truncate_prefix of log from index: %lu.", last_included_index);
+        log_meta_->truncate_prefix(last_included_index);
+        roo::log_warning("current start_index %lu, last_index %lu.", log_meta_->start_index(), log_meta_->last_index());
+    }
+    
+    return 0;
 }
 
 
@@ -324,6 +340,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
     }
 }
 
+    // 获取状态机执行的缓存结果
     std::string content;
     if(state_machine_->fetch_response_msg(aim_index, content))
         apply_out = content;
@@ -352,21 +369,21 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
             roo::log_err("ProtoBuf unmarshal RequestVoteOps response failed.");
             return -1;
         }
-        return do_continue_request_vote_async(response);
+        return continue_request_vote_bf_async(response);
     } else if (opcode == static_cast<uint16_t>(OpCode::kAppendEntries)) {
         Raft::AppendEntriesOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(rsp, &response)) {
             roo::log_err("ProtoBuf unmarshal AppendEntriesOps response failed.");
             return -1;
         }
-        return do_continue_append_entries_async(response);
+        return continue_append_entries_bf_async(response);
     } else if (opcode == static_cast<uint16_t>(OpCode::kInstallSnapshot)) {
         Raft::InstallSnapshotOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(rsp, &response)) {
             roo::log_err("ProtoBuf unmarshal InstallSnapshotOps response failed.");
             return -1;
         }
-        return do_continue_install_snapshot_async(response);
+        return continue_install_snapshot_bf_async(response);
     }
 
     roo::log_err("Unexpected RPC call response with opcode %u", opcode);
@@ -377,7 +394,7 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
 //
 // 响应请求
 //
-int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::Request& request,
+int RaftConsensus::handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
                                                    Raft::RequestVoteOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
@@ -431,7 +448,7 @@ int RaftConsensus::do_process_request_vote_request(const Raft::RequestVoteOps::R
     return 0;
 }
 
-int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOps::Request& request,
+int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
                                                      Raft::AppendEntriesOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
@@ -442,7 +459,7 @@ int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOp
     response.set_last_log_index(log_meta_->last_index());
 
     if (request.term() < context_->term()) {
-        roo::log_warning("AppendEntriesOps failed, recevied larger term %lu compared with our %lu.",
+        roo::log_warning("AppendEntriesOps failed, recevied smaller term %lu compared with our %lu.",
                          request.term(), context_->term());
         response.set_success(false);
         return 0;
@@ -534,20 +551,80 @@ int RaftConsensus::do_process_append_entries_request(const Raft::AppendEntriesOp
     return 0;
 }
 
-int RaftConsensus::do_process_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
+int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
                                                        Raft::InstallSnapshotOps::Response& response) {
     
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     response.set_peer_id(option_.id_);
-    roo::log_err("NOT IMPLEMENTED YET!");
+    response.set_term(context_->term());
+
+    if (request.term() < context_->term()) {
+        roo::log_warning("InstallSnapshot failed, recevied smaller term %lu compared with our %lu.",
+                         request.term(), context_->term());
+        return 0;
+    }
+
+    if (request.term() > context_->term()) {
+        roo::log_warning("Found larger term %lu compared with our %lu, step to it.", request.term(), context_->term());
+
+        // bump up our term
+        context_->set_term(request.term());
+        response.set_term(context_->term());
+    }
+
+    context_->become_follower(request.term());
+    heartbeat_timer_.disable();
+    election_timer_.schedule();
+    withhold_votes_timer_.schedule();
+
+    // 更新本地leader_id
+    if (context_->leader_id() == 0) {
+        context_->set_leader_id(request.leader_id());
+    }
+
+    std::string content = request.data();
+    uint64_t last_included_index = request.last_included_index();
+ //   uint64_t last_included_term  = request.last_included_term();
+
+    Snapshot::SnapshotContent snapshot;
+    if(!roo::ProtoBuf::unmarshalling_from_string(content, &snapshot)) {
+        roo::log_err("unmarshalling snapshot failed, may content currputed.");
+        return -1;
+    }
+
+    if(!state_machine_->apply_snapshot(snapshot)) {
+        roo::log_err("StateMachine apply snapshot failed.");
+        return -1;
+    }                           
+
+    // 处理snapshot中的日志覆盖和本地已经有的日志之间的关系
+    // 最简单的处理方式，就是丢弃本地所有的日志...
+    // 会自动设置start_index和last_index
+
+    roo::log_warning("before install_snapshot, currently start_index %lu, last_index %lu.",
+    log_meta_->start_index(), log_meta_->last_index());
+
+    log_meta_->truncate_prefix(last_included_index + 1);
+    log_meta_->truncate_suffix(last_included_index);
+     
+    roo::log_warning("after install_snapshot at %lu, currently start_index %lu, last_index %lu.",
+    last_included_index, log_meta_->start_index(), log_meta_->last_index());
+
+    // 设置提交索引
+    context_->set_commit_index(last_included_index);
+    log_meta_->set_meta_commit_index(last_included_index);
+    log_meta_->set_meta_apply_index(last_included_index);
+    state_machine_->set_apply_index(last_included_index);
+
+    response.set_bytes_stored(content.size());
+
+    roo::log_warning("StateMachine apply snapshot successfully.");
     return 0;
 }
 
 
-
-
-int RaftConsensus::do_continue_request_vote_async(const Raft::RequestVoteOps::Response& response) {
+int RaftConsensus::continue_request_vote_bf_async(const Raft::RequestVoteOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -640,7 +717,7 @@ uint64_t RaftConsensus::advance_commit_index() const {
     return values.at((peer_set_.size() + 1 - 1) / 2);
 }
 
-int RaftConsensus::do_continue_append_entries_async(const Raft::AppendEntriesOps::Response& response) {
+int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -743,12 +820,86 @@ int RaftConsensus::do_continue_append_entries_async(const Raft::AppendEntriesOps
 }
 
 
-int RaftConsensus::do_continue_install_snapshot_async(const Raft::InstallSnapshotOps::Response& response) {
+int RaftConsensus::continue_install_snapshot_bf_async(const Raft::InstallSnapshotOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
-    roo::log_err("NOT IMPLEMENTED YET!");
-    return 0;
+    // 如果发现更大的term返回，则回退到follower
+    if (response.term() > context_->term()) {
+
+        roo::log_warning("RequestVote received higher term %lu compared with our %lu, rollback to fellower.",
+                         response.term(), context_->term());
+        context_->become_follower(response.term());
+
+        // update meta info
+        LogIf::LogMeta meta;
+        meta.set_current_term(response.term());
+        meta.set_voted_for(response.peer_id());
+        log_meta_->set_meta_data(meta);
+        return 0;
+    }
+
+    auto iter = peer_set_.find(response.peer_id());
+    if (iter == peer_set_.end()) {
+        roo::log_err("AppendEntries received response outside of cluster with id %lu.", response.peer_id());
+        return -1;
+    }
+
+
+    auto peer_ptr = iter->second;
+    
+    // 传输成功，执行和append_entries一样的响应处理
+    if(response.has_bytes_stored()) {
+
+        uint64_t old_match_index = peer_ptr->match_index();
+        uint64_t old_next_index  = peer_ptr->next_index();
+        
+        // 设置peer对应的next_index和match_index
+        peer_ptr->set_match_index(context_->last_included_index());
+        peer_ptr->set_next_index(context_->last_included_index() + 1);
+
+        roo::log_warning("Peer %lu set next_index and commit_index from %lu,%lu to %lu,%lu",
+                         peer_ptr->id(), old_match_index, old_next_index, peer_ptr->match_index(), peer_ptr->next_index());
+
+        // 尝试计算新的提交日志索引
+        uint64_t new_commit_index = advance_commit_index();
+
+        // 重新选主之后，所有的peer的match_index都会被重置为0，所以这边是可能
+        // 出现新算出来的提交日志索引比之前的提交日志索引值低的情况
+        // 因为我们永远不会修改已经提交的日志，所以如果算出来的索引值回退了，我们
+        // 不做更新处理就可以了
+        if (new_commit_index <= context_->commit_index()) {
+            roo::log_warning("advanced new commit_index %lu backward with current %lu, ignore it!",
+                             new_commit_index, context_->commit_index());
+            return 0;
+        }
+
+        // 这个地方可能会涉及到系统安全，TODO
+        if (log_meta_->entry(new_commit_index)->term() != context_->term()) {
+            roo::log_warning("new commit index term doesnot agree %lu %lu",
+                             log_meta_->entry(new_commit_index)->term(), context_->term());
+            return 0;
+        }
+
+        if (new_commit_index != context_->commit_index()) {
+            roo::log_warning("Leader %lu will advance commit_index from %lu to %lu",
+                             my_id(), context_->commit_index(), new_commit_index);
+            context_->set_commit_index(new_commit_index);
+
+            // 持久化提交索引
+            log_meta_->set_meta_commit_index(context_->commit_index());
+            state_machine_->notify_state_machine();
+
+            // 通知等待的客户端
+            this->consensus_notify();
+        }
+
+        return 0;
+
+    }
+
+    roo::log_err("Peer %lu handle install_snapshot failed.", response.peer_id());
+    return -1;
 }
 
 
@@ -807,6 +958,13 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
         }
 
         prev_log_term = prev_log->term();
+    } else if (prev_log_index == 0) {
+        prev_log_term = 0;
+    } else if (prev_log_index == context_->last_included_index()) {
+        prev_log_term = context_->last_included_term();
+    } else {
+        send_install_snapshot(peer);
+        return 0;
     }
 
     Raft::AppendEntriesOps::Request request;
@@ -847,20 +1005,50 @@ int RaftConsensus::send_install_snapshot(const Peer& peer) {
 
     // 构造请求报文
     Raft::InstallSnapshotOps::Request request;
-    #if 0
+
     request.set_term(context_->term());
     request.set_leader_id(context_->id());
-    request.set_last_included_index(last_entry_term_index.first);
-    request.set_last_included_index(last_entry_term_index.second);
 
-    roo::log_info("RequestVote RPC, term %lu, candidate_id %lu, last_log_term %lu, last_log_index %lu.",
-                  request.term(), request.candidate_id(), request.last_log_term(), request.last_log_index());
+    // 加载快照信息
+    std::string content;
+    uint64_t last_included_index = 0;
+    uint64_t last_included_term  = 0;
+    if(!state_machine_->load_snapshot(content, last_included_index, last_included_term)) {
+        roo::log_err("load_snapshot failed.");
+        return -1;
+    }
+
+    // 校验context_中保留的last_included信息和实际snapshot文件中的last_included信息
+    if(last_included_index != context_->last_included_index() ||
+       last_included_term  != context_->last_included_term()) {
+        roo::log_err("snapshot file meta data doesnot match with context info.");
+        roo::log_err("snapshot index %lu, term %lu; context index %lu, term %lu.",
+        last_included_index, last_included_term, context_->last_included_index(), context_->last_included_term());
+
+        context_->set_last_included_index(last_included_index);
+        context_->set_last_included_term(last_included_term);
+    }
+
+    // start_index和last_include中的日志覆盖不能有间隙
+    // 正常处理逻辑不应该有这种数据不一致的情况
+    if(context_->last_included_index() < log_meta_->start_index() -1 ) {
+        std::string msg = roo::va_format("Invalid snapshot %lu and start_index %lu.", 
+        context_->last_included_index(), log_meta_->start_index());
+        PANIC(msg.c_str());
+    }
+
+    request.set_data(content);
+    request.set_last_included_index(last_included_index);
+    request.set_last_included_term(last_included_term);
+
+    roo::log_info("InstallSnapshot RPC, term %lu, leader_id %lu, last_included_index %lu, last_included_term %lu.",
+                  request.term(), request.leader_id(), request.last_included_index(), request.last_included_term());
 
     std::string str_request;
     roo::ProtoBuf::marshalling_to_string(request, &str_request);
-#endif
-    roo::log_err("NOT IMPLEMENTED YET!");
-    return -1;
+    
+    peer.send_raft_RPC(tzrpc::ServiceID::RAFT_SERVICE, Raft::OpCode::kInstallSnapshot, str_request);
+    return 0;
 }
 
 
@@ -919,7 +1107,6 @@ void RaftConsensus::main_thread_loop() {
                 break;
         }
     }
-
 }
 
 } // namespace sisyphus

@@ -233,6 +233,8 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
     sisyphus::Client::StateMachineSelectOps::Response response;
     // 对于快照特殊处理
     if(request.has_snapshot()) {
+
+        roo::log_info("Receive StateMachine Snapshot request.");
         int ret = Captain::instance().raft_consensus_ptr_->state_machine_snapshot();
         if (ret != 0) {
             roo::log_err("handle StateMachineSelectOps Of Snapshot return %d", ret);
@@ -240,6 +242,8 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
             return;
         }
 
+        response.mutable_snapshot()->set_hint(std::to_string(
+                static_cast<long long unsigned int>(Captain::instance().raft_consensus_ptr_->current_leader())));
         response.set_code(0);
         response.set_msg("OK");
         

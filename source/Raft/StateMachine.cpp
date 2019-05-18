@@ -164,8 +164,9 @@ bool StateMachine::fetch_response_msg(uint64_t index, std::string& content) {
 bool StateMachine::create_snapshot(uint64_t& last_included_index, uint64_t& last_included_term) {
     
     snapshot_progress_ = SnapshotProgress::kBegin;
+    notify_state_machine();
     while(snapshot_progress_ != SnapshotProgress::kProcessing) {
-        ::usleep(100);
+        ::usleep(10);
     }
 
     roo::log_warning("Begin to create snapshot ...");
@@ -195,8 +196,9 @@ bool StateMachine::create_snapshot(uint64_t& last_included_index, uint64_t& last
 bool StateMachine::load_snapshot(std::string& content, uint64_t& last_included_index, uint64_t& last_included_term) {
     
     snapshot_progress_ = SnapshotProgress::kBegin;
+    notify_state_machine();
     while(snapshot_progress_ != SnapshotProgress::kProcessing) {
-        ::usleep(100);
+        ::usleep(10);
     }
 
     roo::log_warning("Begin to load snapshot ...");
@@ -209,8 +211,9 @@ bool StateMachine::load_snapshot(std::string& content, uint64_t& last_included_i
 bool StateMachine::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
     
     snapshot_progress_ = SnapshotProgress::kBegin;
+    notify_state_machine();
     while(snapshot_progress_ != SnapshotProgress::kProcessing) {
-        ::usleep(100);
+        ::usleep(10);
     }
 
     roo::log_warning("Begin to apply snapshot ...");

@@ -48,10 +48,20 @@ LevelDBLog::LevelDBLog(const std::string& path) :
 
     // skip meta, and get start_index_, last_index_
     std::unique_ptr<leveldb::Iterator> it(log_meta_fp_->NewIterator(leveldb::ReadOptions()));
+
+#if 0
+    it->SeekToFirst();
+    while(it->Valid()) {
+        std::string key = it->key().ToString();
+        std::string val = it->value().ToString();
+        std::cout << "log:" << key << "," << val << std::endl;
+    }
+#endif
+
     it->SeekToFirst();
     if (it->Valid()) {
         std::string key = it->key().ToString();
-        if (key.find("META_") != std::string::npos) {
+        if (key.find("META_") == std::string::npos) {
             start_index_ = Endian::uint64_from_net(key);
             roo::log_debug("Try seek and found start_index with %lu.", start_index_);
         }
@@ -76,6 +86,8 @@ LevelDBLog::LevelDBLog(const std::string& path) :
         std::string message = roo::va_format("Invalid start_index %lu and last_index %lu", start_index_, last_index_);
         throw roo::ConstructException(message.c_str());
     }
+
+    roo::log_warning("final start_index %lu, last_index %lu", start_index_, last_index_);
 }
 
 LevelDBLog::~LevelDBLog() {
@@ -179,11 +191,17 @@ void LevelDBLog::truncate_prefix(uint64_t start_index) {
         roo::log_err("TruncatePrefix log entries from index %lu failed.", start_index);
     }
 
+    if (last_index_ < start_index_ -1)
+        last_index_ = start_index_ - 1;
+
 }
 
 void LevelDBLog::truncate_suffix(uint64_t last_index) {
 
     std::lock_guard<std::mutex> lock(log_mutex_);
+
+    if (last_index_ < start_index_ -1)
+        last_index_ = start_index_ - 1;
 
     if (last_index >= last_index_)
         return;
