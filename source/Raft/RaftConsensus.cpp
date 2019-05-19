@@ -230,7 +230,7 @@ int RaftConsensus::state_machine_snapshot() {
 
         // trim日志优化
         roo::log_warning("truncate_prefix of log from index: %lu.", last_included_index);
-        log_meta_->truncate_prefix(last_included_index);
+        log_meta_->truncate_prefix(last_included_index + 1);
         roo::log_warning("current start_index %lu, last_index %lu.", log_meta_->start_index(), log_meta_->last_index());
     }
     
@@ -272,10 +272,9 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
 
     // 设置该标志后，main_loop会紧急调用send_append_entries()
     heartbeat_timer_.set_urgent();
-    concensus_notify_.notify_all();
+    consensus_notify_.notify_all();
     
 {
-    std::unique_lock<std::mutex> lock(consensus_mutex_);
 
     auto expire_tp = steady_clock::now();
     if(option_.raft_distr_timeout_ms_.count() != 0) 
@@ -283,16 +282,18 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
     else 
         expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
 
+    std::unique_lock<std::mutex> lock(client_mutex_);
+	
     // no_timeout wakeup by notify_all, notify_one, or spuriously
     // timeout    wakeup by timeout expiration
     while (context_->commit_index() < aim_index && aim_term == context_->term()) {
 
 #if __cplusplus >= 201103L
-        if (concensus_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+        if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
             break;
         }
 #else
-        if (!concensus_notify_.wait_until(lock, expire_tp)) {
+        if (!client_notify_.wait_until(lock, expire_tp)) {
             break;
         }
 #endif
@@ -311,24 +312,24 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
 }
 
 {
-    std::unique_lock<std::mutex> lock(consensus_mutex_);
-
     auto expire_tp = steady_clock::now();
     if(option_.raft_distr_timeout_ms_.count() != 0) 
         expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
     else 
         expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
 
+	
+    std::unique_lock<std::mutex> lock(client_mutex_);
     // no_timeout wakeup by notify_all, notify_one, or spuriously
     // timeout    wakeup by timeout expiration
     while (state_machine_->apply_index() < aim_index) {
 
 #if __cplusplus >= 201103L
-        if (concensus_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+        if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
             break;
         }
 #else
-        if (!concensus_notify_.wait_until(lock, expire_tp)) {
+        if (!client_notify_.wait_until(lock, expire_tp)) {
             break;
         }
 #endif
@@ -416,8 +417,8 @@ int RaftConsensus::handle_request_vote_request(const Raft::RequestVoteOps::Reque
     }
 
     if (request.term() > context_->term()) {
-        roo::log_warning("Found larger term %lu compared with our %lu, step to it.",
-                         request.term(), context_->term());
+        roo::log_warning("Found larger term %lu from %lu compared with our %lu, step to it.",
+                         request.term(), request.candidate_id(), context_->term());
         context_->become_follower(request.term());
     }
 
@@ -608,7 +609,7 @@ int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOp
     log_meta_->truncate_prefix(last_included_index + 1);
     log_meta_->truncate_suffix(last_included_index);
      
-    roo::log_warning("after install_snapshot at %lu, currently start_index %lu, last_index %lu.",
+    roo::log_warning("after install_snapshot at %lu, finally start_index %lu, last_index %lu.",
     last_included_index, log_meta_->start_index(), log_meta_->last_index());
 
     // 设置提交索引
@@ -681,7 +682,7 @@ int RaftConsensus::continue_request_vote_bf_async(const Raft::RequestVoteOps::Re
 
                 // 调度，根据Peer的next_index来发送
                 heartbeat_timer_.set_urgent();
-                concensus_notify_.notify_all();
+                consensus_notify_.notify_all();
                 // send_append_entries();
 
                 roo::log_warning("Node %lu now has been leader.", context_->id());
@@ -759,7 +760,7 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
         uint64_t old_next_index  = peer_ptr->next_index();
         peer_ptr->set_match_index(response.last_log_index());
         peer_ptr->set_next_index(peer_ptr->match_index() + 1);
-        roo::log_warning("Peer %lu set next_index and commit_index from %lu,%lu to %lu,%lu",
+        roo::log_warning("Peer %lu set match_index and next_index from %lu,%lu to %lu,%lu",
                          peer_ptr->id(), old_match_index, old_next_index, peer_ptr->match_index(), peer_ptr->next_index());
 
         // 尝试计算新的提交日志索引
@@ -801,11 +802,12 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
     // response.success() == false
 
     // 默认情况是依次递减来尝试的
-    if (peer_ptr->next_index() > 1)
-        peer_ptr->set_next_index(peer_ptr->next_index() - 1);
+    // if (peer_ptr->next_index() > 1)
+    //    peer_ptr->set_next_index(peer_ptr->next_index() - 1);
 
     // 如果响应返回了last_log_index，则使用这个提示值
     // 在我们的实现中，last_log_index是必须返回的值，所以这边应该是没问题的
+
     if (peer_ptr->next_index() > response.last_log_index() + 1) {
         peer_ptr->set_next_index(response.last_log_index() + 1);
     }
@@ -814,8 +816,9 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
     roo::log_err("AppendEntries for Peer %lu failed, will try send log entries from %lu.",
                  response.peer_id(), iter->second->next_index());
 
-    // schedule AppendEntries RPC again
+    // schedule AppendEntries RPC again for specific Peer
     send_append_entries(*peer_ptr);
+    
     return 0;
 }
 
@@ -1061,9 +1064,9 @@ void RaftConsensus::main_thread_loop() {
                         
             auto expire_tp = steady_clock::now() + std::chrono::milliseconds(100);
 #if __cplusplus >= 201103L
-            concensus_notify_.wait_until(lock, expire_tp);
+            consensus_notify_.wait_until(lock, expire_tp);
 #else
-            concensus_notify_.wait_until(lock, expire_tp);
+            consensus_notify_.wait_until(lock, expire_tp);
 #endif
         }
 
@@ -1098,6 +1101,7 @@ void RaftConsensus::main_thread_loop() {
                     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
                     send_append_entries();
+                    heartbeat_timer_.schedule();
                 }
                 break;
 

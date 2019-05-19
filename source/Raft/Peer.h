@@ -74,6 +74,9 @@ private:
     // 已经复制给peer的最高索引值，新选主后会将该值设置为0
     uint64_t match_index_;
 
+    // 发现Peer在安装快照可能会占用不少的时间，
+    bool install_snapshot_;
+
     friend std::ostream& operator<<(std::ostream& os, const Peer& peer);
 
 };

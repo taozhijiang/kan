@@ -46,7 +46,7 @@ class RaftConsensus {
     // access internal kv_store_
     friend class tzrpc::ClientService;
 
-    // access internal main_notify_
+    // access internal consensus_notify_
     friend class Clock;
 
     __noncopyable__(RaftConsensus)
@@ -57,6 +57,9 @@ public:
 
     RaftConsensus() :
         consensus_mutex_(),
+		consensus_notify_(),
+		client_mutex_(),
+		client_notify_(),
         peer_set_(),
         log_meta_(),
         option_(),
@@ -82,7 +85,9 @@ public:
 
     int state_machine_modify(const std::string& cmd, std::string& apply_out);
     int state_machine_snapshot();
-    void consensus_notify() { concensus_notify_.notify_all(); }
+	
+    void consensus_notify() { consensus_notify_.notify_all(); }
+	void client_notify() { client_notify_.notify_all(); }
 
 private:
 
@@ -116,7 +121,13 @@ private:
     // 因为涉及到的模块比较多，所以该锁是一个模块全局性的大锁
     // 另外，锁的特性是不可重入的，所以要避免死锁
     std::mutex consensus_mutex_;
+    std::condition_variable consensus_notify_;
 
+	// 用于除上面互斥和信号量保护之外的用途，主要是客户端请求需要
+	// 改变状态机的时候
+    std::mutex client_mutex_;
+    std::condition_variable client_notify_;	
+	
     // Timer
     SimpleTimer heartbeat_timer_;
     SimpleTimer election_timer_;
@@ -131,7 +142,6 @@ private:
     Option option_;
     std::unique_ptr<Context> context_;
 
-    std::condition_variable concensus_notify_;
     bool main_thread_stop_;
     std::thread main_thread_;
 

@@ -167,6 +167,10 @@ LevelDBLog::last_term_and_index() const {
 
     std::lock_guard<std::mutex> lock(log_mutex_);
 
+    if (last_index_ < start_index_) {
+        return {0, last_index_};
+    }
+
     auto item = entry(last_index_);
     if (item)
         return{ item->term(), last_index_ };
@@ -174,6 +178,8 @@ LevelDBLog::last_term_and_index() const {
     return{ 0, last_index_ };
 }
 
+// Delete the log entries before the given index.
+// After this call, the log will contain no entries indexed less than start_index
 void LevelDBLog::truncate_prefix(uint64_t start_index) {
 
     std::lock_guard<std::mutex> lock(log_mutex_);
@@ -182,7 +188,7 @@ void LevelDBLog::truncate_prefix(uint64_t start_index) {
         return;
 
     leveldb::WriteBatch batch;
-    for (; start_index_ <= start_index; ++start_index_) {
+    for (; start_index_ < start_index; ++start_index_) {
         batch.Delete(Endian::uint64_to_net(start_index_));
     }
 
@@ -194,27 +200,34 @@ void LevelDBLog::truncate_prefix(uint64_t start_index) {
     if (last_index_ < start_index_ -1)
         last_index_ = start_index_ - 1;
 
+    roo::log_info("TruncatePrefix at %lu finished, current start_index %lu, last_index %lu.",
+                  start_index, start_index_, last_index_);
 }
 
+// Delete the log entries past the given index.
+// After this call, the log will contain no entries indexed greater than last_index.
 void LevelDBLog::truncate_suffix(uint64_t last_index) {
 
     std::lock_guard<std::mutex> lock(log_mutex_);
-
-    if (last_index_ < start_index_ -1)
-        last_index_ = start_index_ - 1;
 
     if (last_index >= last_index_)
         return;
 
     leveldb::WriteBatch batch;
-    for (; last_index_ >= last_index; --last_index_) {
+    for (; last_index_ > last_index; -- last_index_) {
         batch.Delete(Endian::uint64_to_net(last_index_));
     }
 
     leveldb::Status status = log_meta_fp_->Write(leveldb::WriteOptions(), &batch);
     if (!status.ok()) {
-        roo::log_err("TruncateSuffix log entries from index %lu failed.", last_index);
+        roo::log_err("TruncateSuffix log entries from last index %lu failed.", last_index);
     }
+    
+    if (last_index_ < start_index_ -1)
+        last_index_ = start_index_ - 1;
+
+    roo::log_info("Truncatesuffix at %lu finished, current start_index %lu, last_index %lu.",
+                  last_index, start_index_, last_index_);
 }
 
 

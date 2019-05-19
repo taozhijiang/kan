@@ -58,9 +58,9 @@ void StateMachine::state_machine_loop() {
     while (!main_executor_stop_) {
 
         {
-            std::unique_lock<std::mutex> lock(apply_mutex_);
             auto expire_tp = std::chrono::system_clock::now() + std::chrono::seconds(5);
 
+            std::unique_lock<std::mutex> lock(apply_mutex_);
 #if __cplusplus >= 201103L
             apply_notify_.wait_until(lock, expire_tp);
 #else
@@ -72,7 +72,7 @@ void StateMachine::state_machine_loop() {
             snapshot_progress_ = SnapshotProgress::kProcessing;
         
         if(snapshot_progress_ == SnapshotProgress::kProcessing) {
-            roo::log_info("Snapshot is processing ...");
+            roo::log_info("Snapshot is processing, skip this loop ...");
             continue;
         }
 
@@ -110,7 +110,7 @@ void StateMachine::state_machine_loop() {
         ++ apply_index_;
         log_meta_->set_meta_apply_index(apply_index_);
 
-        raft_consensus_.consensus_notify();
+        raft_consensus_.client_notify();
     }
 
 }
