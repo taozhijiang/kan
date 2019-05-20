@@ -21,7 +21,7 @@ public:
         instance_name_(instance_name) {
     }
 
-    ~RaftService() {}
+    ~RaftService() = default;
 
     void handle_RPC(std::shared_ptr<RpcInstance> rpc_instance);
     std::string instance_name() {

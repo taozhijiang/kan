@@ -191,9 +191,28 @@ uint64_t RaftConsensus::my_id() const {
 }
 
 uint64_t RaftConsensus::current_leader() const {
-    if (context_->leader_id() == context_->id())
-        return 0;
     return context_->leader_id();
+}
+
+bool RaftConsensus::is_leader() const {
+    return context_->id() == context_->leader_id();
+}
+
+int RaftConsensus::cluster_stat(std::string& stat) {
+    std::stringstream ss;
+    
+    ss << "cluster stat current node:" << std::endl
+       << context_->str() << std::endl;
+
+    if (is_leader()) {
+        for(auto iter=peer_set_.begin(); iter!=peer_set_.end(); ++ iter) {
+            ss << "peer: " << iter->first << std::endl
+               << iter->second->str() << std::endl;
+        }
+    }
+
+    stat = ss.str();
+    return 0;
 }
 
 
@@ -245,7 +264,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
         return -1;
     }
 
-    if (current_leader() != 0) {
+    if (!is_leader()) {
         roo::log_err("Current leader is %lu, this node can not handle this request.", current_leader());
         return -1;
     }

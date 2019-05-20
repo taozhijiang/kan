@@ -1,7 +1,7 @@
 #include <other/Log.h>
 
 #include <message/ProtoBuf.h>
-#include <Protocol/gen-cpp/Client.pb.h>
+#include <Protocol/gen-cpp/Control.pb.h>
 
 #include <scaffold/Setting.h>
 #include <scaffold/Status.h>
@@ -9,14 +9,14 @@
 #include <Captain.h>
 #include <Raft/RaftConsensus.h>
 
-#include "ClientService.h"
+#include "ControlService.h"
 
 namespace tzrpc {
 
 using sisyphus::Captain;
 
 
-bool ClientService::init() {
+bool ControlService::init() {
 
     auto setting_ptr = Captain::instance().setting_ptr_->get_setting();
     if (!setting_ptr) {
@@ -72,7 +72,7 @@ bool ClientService::init() {
 }
 
 // 系统启动时候初始化，持有整个锁进行
-bool ClientService::handle_rpc_service_conf(const libconfig::Setting& setting) {
+bool ControlService::handle_rpc_service_conf(const libconfig::Setting& setting) {
 
     std::unique_lock<std::mutex> lock(conf_lock_);
 
@@ -100,12 +100,12 @@ bool ClientService::handle_rpc_service_conf(const libconfig::Setting& setting) {
 
 
 
-ExecutorConf ClientService::get_executor_conf() {
+ExecutorConf ControlService::get_executor_conf() {
     SAFE_ASSERT(conf_ptr_);
     return conf_ptr_->executor_conf_;
 }
 
-int ClientService::module_runtime(const libconfig::Config& conf) {
+int ControlService::module_runtime(const libconfig::Config& conf) {
 
     try {
 
@@ -135,7 +135,7 @@ int ClientService::module_runtime(const libconfig::Config& conf) {
 }
 
 // 做一些可选的配置动态更新
-bool ClientService::handle_rpc_service_runtime_conf(const libconfig::Setting& setting) {
+bool ControlService::handle_rpc_service_runtime_conf(const libconfig::Setting& setting) {
 
     ExecutorConf conf;
     if (RpcServiceBase::handle_rpc_service_conf(setting, conf) != 0) {
@@ -152,7 +152,7 @@ bool ClientService::handle_rpc_service_runtime_conf(const libconfig::Setting& se
     return 0;
 }
 
-int ClientService::module_status(std::string& module, std::string& name, std::string& val) {
+int ControlService::module_status(std::string& module, std::string& name, std::string& val) {
 
     // empty status ...
 
@@ -160,17 +160,17 @@ int ClientService::module_status(std::string& module, std::string& name, std::st
 }
 
 
-void ClientService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
+void ControlService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    using sisyphus::Client::OpCode;
+    using sisyphus::Control::OpCode;
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc_instance->get_opcode()) {
-        case OpCode::kSelect:
-            client_select_impl(rpc_instance);
+        case OpCode::kSnapshot:
+            control_snapshot_impl(rpc_instance);
             break;
-        case OpCode::kUpdate:
-            client_update_impl(rpc_instance);
+        case OpCode::kStat:
+            control_stat_impl(rpc_instance);
             break;
 
         default:
@@ -182,60 +182,39 @@ void ClientService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 }
 
 
-void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance) {
+void ControlService::control_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kSelect) {
-        roo::log_err("invalid opcode %u in service Client.", rpc_request_message.header_.opcode);
+    if (rpc_request_message.header_.opcode != sisyphus::Control::OpCode::kSnapshot) {
+        roo::log_err("invalid opcode %u in service Control.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    // 考虑Legacy读优化性能？
-
-    // 检查是否是Leader，如果不是就将其请求转发给Leader，然后再将结果返回给Client
-    if (!Captain::instance().raft_consensus_ptr_->is_leader()) {
-        uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
-        roo::log_warning("The leader is %lu, will atomaticlly forward this request", leader_id);
-
-        auto client = Captain::instance().raft_consensus_ptr_->get_peer(leader_id);
-        if (!client) {
-            roo::log_err("Peer (of Leader) %lu not found!", leader_id);
-            rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
-            return;
-        }
-
-        std::string proxy_response_str{};
-        int code = client->proxy_client_RPC(rpc_request_message.header_.service_id,
-                                            rpc_request_message.header_.opcode,
-                                            rpc_request_message.payload_,
-                                            proxy_response_str);
-        if (code != 0) {
-            roo::log_err("Forward client request from %lu to %lu failed with %d",
-                         Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
-            rpc_instance->reject(RpcResponseStatus::REQUEST_PROXY_ERROR);
-            return;
-        }
-
-        rpc_instance->reply_rpc_message(proxy_response_str);
-        return;
-    }
-
-    // 如果是Leader，则直接处理请求
-    sisyphus::Client::StateMachineSelectOps::Request  request;
+    sisyphus::Control::ControlSnapshotOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
-
     
-    sisyphus::Client::StateMachineSelectOps::Response response;
-    int ret = Captain::instance().raft_consensus_ptr_->kv_store_->select_handle(request, response);
-    if (ret != 0) {
-        roo::log_err("handle StateMachineSelectOps return %d", ret);
-        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
-        return;
+    sisyphus::Control::ControlSnapshotOps::Response response;
+    response.set_code(0);
+    response.set_msg("OK");
+        
+    if(request.has_snapshot()) {
+
+        roo::log_info("Receive ControlSnapshotOps Snapshot request.");
+        int ret = Captain::instance().raft_consensus_ptr_->state_machine_snapshot();
+        if (ret != 0) {
+            roo::log_err("handle ControlSnapshotOps Of Snapshot return %d", ret);
+            rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
+            return;
+        }
+
+        uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
+        response.mutable_snapshot()->set_hint("current_leader:" + std::to_string(
+                static_cast<long long unsigned int>(leader_id)));
     }
 
     std::string response_str;
@@ -243,65 +222,40 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
     rpc_instance->reply_rpc_message(response_str);
 }
 
-// 该接口是异步处理的，Raft将其创建为日志处理
-void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance) {
+
+void ControlService::control_stat_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kUpdate) {
-        roo::log_err("invalid opcode %u in service Client.", rpc_request_message.header_.opcode);
+    if (rpc_request_message.header_.opcode != sisyphus::Control::OpCode::kStat) {
+        roo::log_err("invalid opcode %u in service Control.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
-
-    // 检查是否是Leader，如果不是就将其请求转发给Leader，然后再将结果返回给Client
-    if (!Captain::instance().raft_consensus_ptr_->is_leader()) {
-        uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
-        roo::log_warning("The leader is %lu, will atomaticlly forward this request", leader_id);
-
-        auto client = Captain::instance().raft_consensus_ptr_->get_peer(leader_id);
-        if (!client) {
-            roo::log_err("Peer (of Leader) %lu not found!", leader_id);
+    
+    sisyphus::Control::ControlStatOps::Request  request;
+    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
+        roo::log_err("unmarshal request failed.");
+        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
+        return;
+    }
+    
+    // 返回报文格式
+    sisyphus::Control::ControlStatOps::Response response;
+    response.set_code(0);
+    response.set_msg("OK");
+        
+    if (request.has_stat()) {
+        
+        std::string context;
+        int ret = Captain::instance().raft_consensus_ptr_->cluster_stat(context);
+        if (ret != 0) {
+            roo::log_err("handle Raft cluster_stat return %d", ret);
             rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
             return;
         }
 
-        std::string proxy_response_str{};
-        int code = client->proxy_client_RPC(rpc_request_message.header_.service_id,
-                                            rpc_request_message.header_.opcode,
-                                            rpc_request_message.payload_,
-                                            proxy_response_str);
-        if (code != 0) {
-            roo::log_err("Forward client request from %lu to %lu failed with %d",
-                         Captain::instance().raft_consensus_ptr_->my_id(), leader_id, code);
-            rpc_instance->reject(RpcResponseStatus::REQUEST_PROXY_ERROR);
-            return;
-        }
-
-        rpc_instance->reply_rpc_message(proxy_response_str);
-        return;
+        response.mutable_stat()->set_context(context);
     }
-
-    if (!Captain::instance().raft_consensus_ptr_->is_leader()) {
-        uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
-        roo::log_warning("Bad, The leader is %lu", leader_id);
-        rpc_instance->reject(RpcResponseStatus::NOT_LEADER);
-        return;
-    }
-
-    // 尝试创建日志，其内容是protobuf序列化的字符串，状态机需要解析处理
-    std::string context;
-    int ret = Captain::instance().raft_consensus_ptr_->state_machine_modify(rpc_request_message.payload_, context);
-    if (ret != 0) {
-        roo::log_err("handle Raft append_entries return %d", ret);
-        rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
-        return;
-    }
-
-    // 返回异步处理成功
-    sisyphus::Client::StateMachineUpdateOps::Response response;
-    response.set_code(0);
-    response.set_msg("OK");
-    response.set_context(context);
 
     std::string response_str;
     roo::ProtoBuf::marshalling_to_string(response, &response_str);

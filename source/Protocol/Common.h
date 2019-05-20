@@ -15,6 +15,7 @@ namespace ServiceID {
 enum {
     RAFT_SERVICE    = 1,   // raft core service
     CLIENT_SERVICE  = 2,   // Client Select and StateMachine update
+    CONTROL_SERVICE = 3,   // 控制服务，比如创建快照、打印集群信息等
 };
 
 }

@@ -24,6 +24,7 @@
 #include <Protocol/Common.h>
 #include <Protocol/ServiceImpl/RaftService.h>
 #include <Protocol/ServiceImpl/ClientService.h>
+#include <Protocol/ServiceImpl/ControlService.h>
 
 
 #include <Raft/RaftConsensus.h>
@@ -47,6 +48,7 @@ using tzrpc::Dispatcher;
 using tzrpc::Service;
 using tzrpc::RaftService;
 using tzrpc::ClientService;
+using tzrpc::ControlService;
 
 bool Captain::init(const std::string& cfgFile) {
 
@@ -122,6 +124,13 @@ bool Captain::init(const std::string& cfgFile) {
         return false;
     }
     Dispatcher::instance().register_service(tzrpc::ServiceID::CLIENT_SERVICE, client_service);
+
+    std::shared_ptr<Service> control_service = std::make_shared<ControlService>("ControlService");
+    if (!control_service || !control_service->init()) {
+        roo::log_err("create ControlService failed.");
+        return false;
+    }
+    Dispatcher::instance().register_service(tzrpc::ServiceID::CONTROL_SERVICE, control_service);
 
 
     // 再进行整体服务的初始化

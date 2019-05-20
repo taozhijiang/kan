@@ -23,7 +23,9 @@ Context::Context(uint64_t id, std::unique_ptr<LogIf>& log_meta) :
     voted_for_(0),
     quorum_granted_(),
     role_(Role::kFollower),
-    commit_index_(0) {
+    commit_index_(0),
+    last_included_index_(0),
+    last_included_term_(0) {
 
 }
 

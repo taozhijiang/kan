@@ -81,10 +81,12 @@ public:
     // 如果本机就是Leader，则返回0，否则返回Leader的id
     uint64_t my_id() const;
     uint64_t current_leader() const;
+    bool is_leader() const;
     std::shared_ptr<Peer> get_peer(uint64_t peer_id) const;
 
     int state_machine_modify(const std::string& cmd, std::string& apply_out);
     int state_machine_snapshot();
+    int cluster_stat(std::string& stat);
 	
     void consensus_notify() { consensus_notify_.notify_all(); }
 	void client_notify() { client_notify_.notify_all(); }

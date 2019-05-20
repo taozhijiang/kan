@@ -1,5 +1,5 @@
-#ifndef __PROTOCOL_CLIENT_SERVICE_H__
-#define __PROTOCOL_CLIENT_SERVICE_H__
+#ifndef __PROTOCOL_CONTROL_SERVICE_H__
+#define __PROTOCOL_CONTROL_SERVICE_H__
 
 #include <xtra_rhel.h>
 
@@ -14,16 +14,16 @@
 
 namespace tzrpc {
 
-class ClientService : public Service,
+class ControlService : public Service,
     public RpcServiceBase {
 
 public:
-    explicit ClientService(const std::string& instance_name) :
+    explicit ControlService(const std::string& instance_name) :
         RpcServiceBase(instance_name),
         instance_name_(instance_name) {
     }
 
-    ~ClientService() = default;
+    ~ControlService() = default;
 
     void handle_RPC(std::shared_ptr<RpcInstance> rpc_instance);
     std::string instance_name() {
@@ -58,8 +58,8 @@ private:
 private:
 
     ////////// RPC handlers //////////
-    void client_select_impl(std::shared_ptr<RpcInstance> rpc_instance);
-    void client_update_impl(std::shared_ptr<RpcInstance> rpc_instance);
+    void control_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instance);
+    void control_stat_impl(std::shared_ptr<RpcInstance> rpc_instance);
 
     const std::string instance_name_;
 
@@ -67,4 +67,4 @@ private:
 
 } // namespace sisyphus
 
-#endif // __PROTOCOL_CLIENT_SERVICE_H__
+#endif // __PROTOCOL_CONTROL_SERVICE_H__
