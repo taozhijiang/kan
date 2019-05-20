@@ -22,7 +22,7 @@
 namespace sisyphus {
 
 
-enum class SnapshotProgress: uint8_t {
+enum class SnapshotProgress : uint8_t {
     kBegin      = 1,
     kProcessing = 2,
     kDone       = 3,
@@ -37,7 +37,7 @@ class StateMachine {
 
 public:
 
-    StateMachine(RaftConsensus& raft_consensus, 
+    StateMachine(RaftConsensus& raft_consensus,
                  std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store);
     ~StateMachine() = default;
 

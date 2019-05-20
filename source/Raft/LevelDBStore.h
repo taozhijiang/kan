@@ -11,8 +11,8 @@
 #include <xtra_rhel.h>
 #include <leveldb/db.h>
 
-#include <boost/thread/locks.hpp>    
-#include <boost/thread/shared_mutex.hpp>    
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
 
 #include <Raft/StoreIf.h>
 #include <system/ConstructException.h>
@@ -38,10 +38,10 @@ public:
     // 上层对业务友好的话，可以同步这种快照创建和恢复中的信息
 
     // 创建状态机快照，先写临时文件，如果成功了再将临时文件重命名为正式文件
-    bool create_snapshot(uint64_t last_included_index, uint64_t last_included_term) override;
-    bool load_snapshot(std::string& content, uint64_t& last_included_index, uint64_t& last_included_term) override;
+    bool create_snapshot(uint64_t last_included_index, uint64_t last_included_term)override;
+    bool load_snapshot(std::string& content, uint64_t& last_included_index, uint64_t& last_included_term)override;
 
-    bool apply_snapshot(const Snapshot::SnapshotContent& snapshot) override;
+    bool apply_snapshot(const Snapshot::SnapshotContent& snapshot)override;
 
 private:
 

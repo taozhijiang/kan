@@ -19,7 +19,7 @@
 
 namespace sisyphus {
 
-StateMachine::StateMachine(RaftConsensus& raft_consensus, 
+StateMachine::StateMachine(RaftConsensus& raft_consensus,
                            std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store) :
     raft_consensus_(raft_consensus),
     log_meta_(log_meta),
@@ -68,10 +68,10 @@ void StateMachine::state_machine_loop() {
 #endif
         }
 
-        if(snapshot_progress_ == SnapshotProgress::kBegin) 
+        if (snapshot_progress_ == SnapshotProgress::kBegin)
             snapshot_progress_ = SnapshotProgress::kProcessing;
-        
-        if(snapshot_progress_ == SnapshotProgress::kProcessing) {
+
+        if (snapshot_progress_ == SnapshotProgress::kProcessing) {
             roo::log_info("Snapshot is processing, skip this loop ...");
             continue;
         }
@@ -88,18 +88,18 @@ void StateMachine::state_machine_loop() {
 
         LogIf::EntryPtr entry = log_meta_->entry(apply_index_ + 1);
         if (entry->type() == Raft::EntryType::kNoop) {
-            roo::log_info("Skip NOOP type entry at term %lu, current processing apply_index %lu.", 
+            roo::log_info("Skip NOOP type entry at term %lu, current processing apply_index %lu.",
                           entry->term(), apply_index_ + 1);
         } else if (entry->type() == Raft::EntryType::kNormal) {
             // 无论成功失败，都前进
             std::string content;
-            if(do_apply(entry, content) == 0) {
-                if(!content.empty()) {
+            if (do_apply(entry, content) == 0) {
+                if (!content.empty()) {
                     std::lock_guard<std::mutex> lock(apply_rsp_mutex_);
                     apply_rsp_[apply_index_ + 1] = content;
                 }
             }
-            roo::log_info("Applied Normal type entry at term %lu, current processing apply_index %lu.", 
+            roo::log_info("Applied Normal type entry at term %lu, current processing apply_index %lu.",
                           entry->term(), apply_index_ + 1);
         } else {
             PANIC("Unhandled entry type %d found at term %lu, apply_index %lu.",
@@ -107,7 +107,7 @@ void StateMachine::state_machine_loop() {
         }
 
         // step forward apply_index
-        ++ apply_index_;
+        ++apply_index_;
         log_meta_->set_meta_apply_index(apply_index_);
 
         raft_consensus_.client_notify();
@@ -129,9 +129,9 @@ int StateMachine::do_apply(LogIf::EntryPtr entry, std::string& content_out) {
 
     int ret =  kv_store_->update_handle(request);
 
-    if(ret == 0)
+    if (ret == 0)
         content_out = "success at statemachine";
-    else 
+    else
         content_out = "failure at statemachine";
 
     return ret;
@@ -143,9 +143,9 @@ bool StateMachine::fetch_response_msg(uint64_t index, std::string& content) {
     std::lock_guard<std::mutex> lock(apply_rsp_mutex_);
 
     auto iter = apply_rsp_.find(index);
-    if(iter == apply_rsp_.end())
+    if (iter == apply_rsp_.end())
         return false;
-        
+
     content = iter->second;
 
     // 删除掉
@@ -153,38 +153,38 @@ bool StateMachine::fetch_response_msg(uint64_t index, std::string& content) {
 
     // 剔除掉部分过于历史的响应
 
- //   uint64_t low_limit = apply_index_ < 5001 ? 1 : apply_index_ - 5000;
- //   auto low_bound = apply_rsp_.lower_bound(low_limit);
- //   apply_rsp_.erase(apply_rsp_.begin(), low_bound);
+    //   uint64_t low_limit = apply_index_ < 5001 ? 1 : apply_index_ - 5000;
+    //   auto low_bound = apply_rsp_.lower_bound(low_limit);
+    //   apply_rsp_.erase(apply_rsp_.begin(), low_bound);
 
     return true;
 }
 
 
 bool StateMachine::create_snapshot(uint64_t& last_included_index, uint64_t& last_included_term) {
-    
+
     snapshot_progress_ = SnapshotProgress::kBegin;
     notify_state_machine();
-    while(snapshot_progress_ != SnapshotProgress::kProcessing) {
+    while (snapshot_progress_ != SnapshotProgress::kProcessing) {
         ::usleep(10);
     }
 
     roo::log_warning("Begin to create snapshot ...");
-    if(apply_index_ == 0) {
+    if (apply_index_ == 0) {
         roo::log_warning("StateMachine is initially state, give up.");
         snapshot_progress_ = SnapshotProgress::kDone;
         return true;
     }
 
     auto entry = log_meta_->entry(apply_index_);
-    if(!entry) {
+    if (!entry) {
         roo::log_err("Get entry at %lu failed.", apply_index_);
         snapshot_progress_ = SnapshotProgress::kDone;
         return false;
     }
 
     bool result = kv_store_->create_snapshot(apply_index_, entry->term());
-    if(result) {
+    if (result) {
         last_included_index = apply_index_;
         last_included_term  = entry->term();
     }
@@ -194,10 +194,10 @@ bool StateMachine::create_snapshot(uint64_t& last_included_index, uint64_t& last
 }
 
 bool StateMachine::load_snapshot(std::string& content, uint64_t& last_included_index, uint64_t& last_included_term) {
-    
+
     snapshot_progress_ = SnapshotProgress::kBegin;
     notify_state_machine();
-    while(snapshot_progress_ != SnapshotProgress::kProcessing) {
+    while (snapshot_progress_ != SnapshotProgress::kProcessing) {
         ::usleep(10);
     }
 
@@ -209,10 +209,10 @@ bool StateMachine::load_snapshot(std::string& content, uint64_t& last_included_i
 }
 
 bool StateMachine::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
-    
+
     snapshot_progress_ = SnapshotProgress::kBegin;
     notify_state_machine();
-    while(snapshot_progress_ != SnapshotProgress::kProcessing) {
+    while (snapshot_progress_ != SnapshotProgress::kProcessing) {
         ::usleep(10);
     }
 

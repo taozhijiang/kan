@@ -155,7 +155,7 @@ bool LevelDBLog::entries(uint64_t start, std::vector<EntryPtr>& entries, uint64_
         entry->ParseFromString(val);
         entries.emplace_back(entry);
 
-        if(limit != 0 && ++count > limit)
+        if (limit != 0 && ++count > limit)
             break;
     }
 
@@ -168,7 +168,7 @@ LevelDBLog::last_term_and_index() const {
     std::lock_guard<std::mutex> lock(log_mutex_);
 
     if (last_index_ < start_index_) {
-        return {0, last_index_};
+        return{ 0, last_index_ };
     }
 
     auto item = entry(last_index_);
@@ -197,7 +197,7 @@ void LevelDBLog::truncate_prefix(uint64_t start_index) {
         roo::log_err("TruncatePrefix log entries from index %lu failed.", start_index);
     }
 
-    if (last_index_ < start_index_ -1)
+    if (last_index_ < start_index_ - 1)
         last_index_ = start_index_ - 1;
 
     roo::log_info("TruncatePrefix at %lu finished, current start_index %lu, last_index %lu.",
@@ -214,7 +214,7 @@ void LevelDBLog::truncate_suffix(uint64_t last_index) {
         return;
 
     leveldb::WriteBatch batch;
-    for (; last_index_ > last_index; -- last_index_) {
+    for (; last_index_ > last_index; --last_index_) {
         batch.Delete(Endian::uint64_to_net(last_index_));
     }
 
@@ -222,8 +222,8 @@ void LevelDBLog::truncate_suffix(uint64_t last_index) {
     if (!status.ok()) {
         roo::log_err("TruncateSuffix log entries from last index %lu failed.", last_index);
     }
-    
-    if (last_index_ < start_index_ -1)
+
+    if (last_index_ < start_index_ - 1)
         last_index_ = start_index_ - 1;
 
     roo::log_info("Truncatesuffix at %lu finished, current start_index %lu, last_index %lu.",

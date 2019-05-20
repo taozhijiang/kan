@@ -80,7 +80,7 @@ bool RaftConsensus::init() {
 
     // 随机化选取超时定时器
     if (option_.election_timeout_ms_.count() > 3)
-        option_.election_timeout_ms_ += duration( ::random() % (option_.election_timeout_ms_.count() / 3));
+        option_.election_timeout_ms_ += duration(::random() % (option_.election_timeout_ms_.count() / 3));
 
     // 初始化 peer_map_ 的主机列表
     for (auto iter = option_.members_.begin(); iter != option_.members_.end(); ++iter) {
@@ -200,14 +200,14 @@ bool RaftConsensus::is_leader() const {
 
 int RaftConsensus::cluster_stat(std::string& stat) {
     std::stringstream ss;
-    
+
     ss << "cluster stat current node:" << std::endl
-       << context_->str() << std::endl;
+        << context_->str() << std::endl;
 
     if (is_leader()) {
-        for(auto iter=peer_set_.begin(); iter!=peer_set_.end(); ++ iter) {
-            ss << "peer: " << iter->first << std::endl
-               << iter->second->str() << std::endl;
+        for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter) {
+            ss << std::endl
+                << iter->second->str() << std::endl;
         }
     }
 
@@ -232,13 +232,13 @@ int RaftConsensus::state_machine_snapshot() {
     uint64_t last_included_index = 0;
     uint64_t last_included_term  = 0;
 
-    if(!state_machine_->create_snapshot(last_included_index, last_included_term)){
+    if (!state_machine_->create_snapshot(last_included_index, last_included_term)) {
         roo::log_err("Create Snapshot failed.");
         return -1;
     }
-    
-    roo::log_warning("Create Snapshot successfully at index %lu, term %lu.", 
-                    last_included_index, last_included_term);
+
+    roo::log_warning("Create Snapshot successfully at index %lu, term %lu.",
+                     last_included_index, last_included_term);
 
     // 更新context_
     {
@@ -252,15 +252,135 @@ int RaftConsensus::state_machine_snapshot() {
         log_meta_->truncate_prefix(last_included_index + 1);
         roo::log_warning("current start_index %lu, last_index %lu.", log_meta_->start_index(), log_meta_->last_index());
     }
-    
+
     return 0;
 }
 
 
+// 必须确保当前是有效的Leader节点，同时取到请求时候的最新commit_index，
+// 依据该commit_index取出apply_index后对应的执行结果，得到的内容才能够
+// 保证是线性一致性的
+int RaftConsensus::state_machine_query(const std::string& cmd, std::string& query_out) {
+
+    if (cmd.empty()) {
+        roo::log_err("StateMachineSelect cmd is empty.");
+        return -1;
+    }
+
+    if (!is_leader()) {
+        roo::log_err("Current leader is %lu, this node can not handle this request.", current_leader());
+        return -1;
+    }
+
+    uint64_t aim_epoch = context_->inc_epoch();
+    uint64_t aim_index = 0;
+    uint64_t aim_term  = 0;
+
+    // 设置该标志后，main_loop会紧急调用send_append_entries()，就会启动一次心跳请求
+    heartbeat_timer_.set_urgent();
+    consensus_notify_.notify_all();
+
+    {
+
+        auto expire_tp = steady_clock::now();
+        if (option_.raft_distr_timeout_ms_.count() != 0)
+            expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
+        else
+            expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
+
+        std::unique_lock<std::mutex> lock(client_mutex_);
+
+        // no_timeout wakeup by notify_all, notify_one, or spuriously
+        // timeout    wakeup by timeout expiration
+        while (advance_epoch() < aim_epoch) {
+
+#if __cplusplus >= 201103L
+            if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+                break;
+            }
+#else
+            if (!client_notify_.wait_until(lock, expire_tp)) {
+                break;
+            }
+#endif
+        }
+
+
+        aim_index = context_->commit_index();
+        aim_term  = 0;
+        if (context_->commit_index() == context_->last_included_index()) {
+            aim_term = context_->last_included_term();
+        } else {
+            auto entry = log_meta_->entry(context_->commit_index());
+            aim_term = entry->term();
+        }
+
+        // 比如重新发生了选举操作
+        if (aim_term != context_->term()) {
+            roo::log_err("Term changed when epoch check, previous %lu, current %lu", aim_term, context_->term());
+            return -1;
+        }
+
+        roo::log_info("up-to-date leader, epoch %lu, and aim_term %lu aim_index %lu.", aim_epoch, aim_term, aim_index);
+    }
+
+    {
+        // we are the up-to-date leader
+        // wait until apply_index come to the commit_index
+
+        auto expire_tp = steady_clock::now();
+        if (option_.raft_distr_timeout_ms_.count() != 0)
+            expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
+        else
+            expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
+
+
+        std::unique_lock<std::mutex> lock(client_mutex_);
+        // no_timeout wakeup by notify_all, notify_one, or spuriously
+        // timeout    wakeup by timeout expiration
+        while (state_machine_->apply_index() < aim_index) {
+
+#if __cplusplus >= 201103L
+            if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+                break;
+            }
+#else
+            if (!client_notify_.wait_until(lock, expire_tp)) {
+                break;
+            }
+#endif
+        }
+
+        if (state_machine_->apply_index() < aim_index) {
+            roo::log_err("wait for state_machine apply entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+            return -1;
+        }
+    }
+
+    Client::StateMachineSelectOps::Request  request;
+    if (!roo::ProtoBuf::unmarshalling_from_string(cmd, &request)) {
+        roo::log_err("unmarshal request failed.");
+        return -1;
+    }
+
+    Client::StateMachineSelectOps::Response response;
+    int ret = kv_store_->select_handle(request, response);
+    if (ret != 0) {
+        roo::log_err("kv store do query failed with %d.", ret);
+        return ret;
+    }
+
+    response.set_code(0);
+    response.set_msg("OK");
+    roo::ProtoBuf::marshalling_to_string(response, &query_out);
+
+    return 0;
+}
+
 int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& apply_out) {
 
     if (cmd.empty()) {
-        roo::log_err("StateMachine transfer cmd is empty.");
+        roo::log_err("StateMachineUpdate cmd is empty.");
         return -1;
     }
 
@@ -273,98 +393,103 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
     uint64_t aim_term  = 0;
     uint64_t aim_index = 0;
 
-{
-    // 创建附带状态机变更指令的业务日志RPC
-    LogIf::EntryPtr entry = std::make_shared<LogIf::Entry>();
-    entry->set_term(context_->term());
-    entry->set_type(Raft::EntryType::kNormal);
-    entry->set_data(cmd);
+    {
+        // 创建附带状态机变更指令的业务日志RPC
+        LogIf::EntryPtr entry = std::make_shared<LogIf::Entry>();
+        entry->set_term(context_->term());
+        entry->set_type(Raft::EntryType::kNormal);
+        entry->set_data(cmd);
 
-    std::lock_guard<std::mutex> lock(consensus_mutex_);
-    log_meta_->append({ entry });
-    auto term_and_index = log_meta_->last_term_and_index();
-    aim_term  = term_and_index.first;
-    aim_index = term_and_index.second;
-}
+        std::lock_guard<std::mutex> lock(consensus_mutex_);
+        log_meta_->append({ entry });
+        auto term_and_index = log_meta_->last_term_and_index();
+        aim_term  = term_and_index.first;
+        aim_index = term_and_index.second;
+    }
     roo::log_info("The request aim for index: %lu", aim_index);
 
 
     // 设置该标志后，main_loop会紧急调用send_append_entries()
     heartbeat_timer_.set_urgent();
     consensus_notify_.notify_all();
-    
-{
 
-    auto expire_tp = steady_clock::now();
-    if(option_.raft_distr_timeout_ms_.count() != 0) 
-        expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
-    else 
-        expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
+    {
 
-    std::unique_lock<std::mutex> lock(client_mutex_);
-	
-    // no_timeout wakeup by notify_all, notify_one, or spuriously
-    // timeout    wakeup by timeout expiration
-    while (context_->commit_index() < aim_index && aim_term == context_->term()) {
+        auto expire_tp = steady_clock::now();
+        if (option_.raft_distr_timeout_ms_.count() != 0)
+            expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
+        else
+            expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
 
-#if __cplusplus >= 201103L
-        if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
-            break;
-        }
-#else
-        if (!client_notify_.wait_until(lock, expire_tp)) {
-            break;
-        }
-#endif
-    }
+        std::unique_lock<std::mutex> lock(client_mutex_);
 
-    // 重新发生了选举操作
-    if(aim_term != context_->term()) {
-        roo::log_err("Term changed when replicate entry, previous %lu, current %lu", aim_term, context_->term());
-        return -1;
-    }
-
-    if(context_->commit_index() < aim_index) {
-        roo::log_err("replicate entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
-        return -1;
-    }
-}
-
-{
-    auto expire_tp = steady_clock::now();
-    if(option_.raft_distr_timeout_ms_.count() != 0) 
-        expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
-    else 
-        expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
-
-	
-    std::unique_lock<std::mutex> lock(client_mutex_);
-    // no_timeout wakeup by notify_all, notify_one, or spuriously
-    // timeout    wakeup by timeout expiration
-    while (state_machine_->apply_index() < aim_index) {
+        // no_timeout wakeup by notify_all, notify_one, or spuriously
+        // timeout    wakeup by timeout expiration
+        while (context_->commit_index() < aim_index && aim_term == context_->term()) {
 
 #if __cplusplus >= 201103L
-        if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
-            break;
-        }
+            if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+                break;
+            }
 #else
-        if (!client_notify_.wait_until(lock, expire_tp)) {
-            break;
-        }
+            if (!client_notify_.wait_until(lock, expire_tp)) {
+                break;
+            }
 #endif
+        }
+
+        // 重新发生了选举操作
+        if (aim_term != context_->term()) {
+            roo::log_err("Term changed when replicate entry, previous %lu, current %lu", aim_term, context_->term());
+            return -1;
+        }
+
+        if (context_->commit_index() < aim_index) {
+            roo::log_err("replicate entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+            return -1;
+        }
     }
 
-    if(state_machine_->apply_index() < aim_index) {
-        roo::log_err("replicate entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
-        return -1;
+    {
+        auto expire_tp = steady_clock::now();
+        if (option_.raft_distr_timeout_ms_.count() != 0)
+            expire_tp += std::chrono::milliseconds(option_.raft_distr_timeout_ms_);
+        else
+            expire_tp += std::chrono::milliseconds(std::numeric_limits<int32_t>::max());
+
+
+        std::unique_lock<std::mutex> lock(client_mutex_);
+        // no_timeout wakeup by notify_all, notify_one, or spuriously
+        // timeout    wakeup by timeout expiration
+        while (state_machine_->apply_index() < aim_index) {
+
+#if __cplusplus >= 201103L
+            if (client_notify_.wait_until(lock, expire_tp) == std::cv_status::timeout) {
+                break;
+            }
+#else
+            if (!client_notify_.wait_until(lock, expire_tp)) {
+                break;
+            }
+#endif
+        }
+
+        if (state_machine_->apply_index() < aim_index) {
+            roo::log_err("wait for state_machine apply entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+            return -1;
+        }
     }
-}
 
     // 获取状态机执行的缓存结果
-    std::string content;
-    if(state_machine_->fetch_response_msg(aim_index, content))
-        apply_out = content;
+    Client::StateMachineUpdateOps::Response response;
+    response.set_code(0);
+    response.set_msg("OK");
 
+    std::string content;
+    if (state_machine_->fetch_response_msg(aim_index, content))
+        response.set_context(content);
+
+    roo::ProtoBuf::marshalling_to_string(response, &apply_out);
     return 0;
 }
 
@@ -415,11 +540,12 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
 // 响应请求
 //
 int RaftConsensus::handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
-                                                   Raft::RequestVoteOps::Response& response) {
+                                               Raft::RequestVoteOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     response.set_peer_id(context_->id());
+    response.set_epoch(request.epoch());
 
     auto last_entry_term_index = log_meta_->last_term_and_index();
     bool log_is_ok = (request.last_log_term() > last_entry_term_index.first) ||
@@ -469,15 +595,16 @@ int RaftConsensus::handle_request_vote_request(const Raft::RequestVoteOps::Reque
 }
 
 int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
-                                                     Raft::AppendEntriesOps::Response& response) {
+                                                 Raft::AppendEntriesOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     response.set_peer_id(option_.id_);
+    response.set_epoch(request.epoch());
+
     response.set_term(context_->term());
     response.set_success(false);
     response.set_last_log_index(log_meta_->last_index());
-
     if (request.term() < context_->term()) {
         roo::log_warning("AppendEntriesOps failed, recevied smaller term %lu compared with our %lu.",
                          request.term(), context_->term());
@@ -566,17 +693,20 @@ int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::R
     if (context_->commit_index() < request.leader_commit()) {
         context_->set_commit_index(request.leader_commit());
         log_meta_->set_meta_commit_index(context_->commit_index());
+        this->client_notify();
     }
 
     return 0;
 }
 
 int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
-                                                       Raft::InstallSnapshotOps::Response& response) {
-    
+                                                   Raft::InstallSnapshotOps::Response& response) {
+
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
     response.set_peer_id(option_.id_);
+    response.set_epoch(request.epoch());
+
     response.set_term(context_->term());
 
     if (request.term() < context_->term()) {
@@ -605,37 +735,39 @@ int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOp
 
     std::string content = request.data();
     uint64_t last_included_index = request.last_included_index();
- //   uint64_t last_included_term  = request.last_included_term();
+    //   uint64_t last_included_term  = request.last_included_term();
 
     Snapshot::SnapshotContent snapshot;
-    if(!roo::ProtoBuf::unmarshalling_from_string(content, &snapshot)) {
+    if (!roo::ProtoBuf::unmarshalling_from_string(content, &snapshot)) {
         roo::log_err("unmarshalling snapshot failed, may content currputed.");
         return -1;
     }
 
-    if(!state_machine_->apply_snapshot(snapshot)) {
+    if (!state_machine_->apply_snapshot(snapshot)) {
         roo::log_err("StateMachine apply snapshot failed.");
         return -1;
-    }                           
+    }
 
     // 处理snapshot中的日志覆盖和本地已经有的日志之间的关系
     // 最简单的处理方式，就是丢弃本地所有的日志...
     // 会自动设置start_index和last_index
 
     roo::log_warning("before install_snapshot, currently start_index %lu, last_index %lu.",
-    log_meta_->start_index(), log_meta_->last_index());
+                     log_meta_->start_index(), log_meta_->last_index());
 
     log_meta_->truncate_prefix(last_included_index + 1);
     log_meta_->truncate_suffix(last_included_index);
-     
+
     roo::log_warning("after install_snapshot at %lu, finally start_index %lu, last_index %lu.",
-    last_included_index, log_meta_->start_index(), log_meta_->last_index());
+                     last_included_index, log_meta_->start_index(), log_meta_->last_index());
 
     // 设置提交索引
     context_->set_commit_index(last_included_index);
     log_meta_->set_meta_commit_index(last_included_index);
     log_meta_->set_meta_apply_index(last_included_index);
     state_machine_->set_apply_index(last_included_index);
+
+    this->client_notify();
 
     response.set_bytes_stored(content.size());
 
@@ -663,16 +795,22 @@ int RaftConsensus::continue_request_vote_bf_async(const Raft::RequestVoteOps::Re
         return 0;
     }
 
+    auto iter = peer_set_.find(response.peer_id());
+    if (iter == peer_set_.end()) {
+        std::string msg = roo::va_format("RequestVote received vote from peer %lu out of cluster.", response.peer_id());
+        PANIC(msg.c_str());
+    }
+
+    auto peer_ptr = iter->second;
+    peer_ptr->set_latest_epoch(response.epoch());
+    this->client_notify();
+
     // 候选者，检查选取结果
     if (context_->role() == Role::kCandidate) {
 
         if (response.vote_granted() == true) {
 
-            uint64_t peer_id = response.peer_id();
-            if (peer_set_.find(peer_id) == peer_set_.end()) {
-                PANIC("RequestVote received vote from peer out of cluster.");
-            }
-            context_->add_quorum_granted(peer_id);
+            context_->add_quorum_granted(peer_ptr->id());
 
             // 选举成功
             if (context_->quorum_count() > (option_.members_.size() + 1) / 2) {
@@ -737,6 +875,19 @@ uint64_t RaftConsensus::advance_commit_index() const {
     return values.at((peer_set_.size() + 1 - 1) / 2);
 }
 
+// 保证线性一致性读的epoch
+uint64_t RaftConsensus::advance_epoch() const {
+
+    std::vector<uint64_t> values{};
+    for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter)
+        values.push_back(iter->second->latest_epoch());
+
+    values.emplace_back(context_->epoch());
+    std::sort(values.begin(), values.end());
+
+    return values.at((peer_set_.size() + 1 - 1) / 2);
+}
+
 int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
@@ -762,15 +913,14 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
         PANIC("Our implementation, AppendEntries response required last_log_index!");
     }
 
-
     auto iter = peer_set_.find(response.peer_id());
     if (iter == peer_set_.end()) {
-        roo::log_err("AppendEntries received response outside of cluster with id %lu.", response.peer_id());
-        return -1;
+        std::string msg = roo::va_format("AppendEntries received response outside of cluster with id %lu.", response.peer_id());
+        PANIC(msg.c_str());
     }
-
-
     auto peer_ptr = iter->second;
+    peer_ptr->set_latest_epoch(response.epoch());
+    this->client_notify();
 
     if (response.success() == true) {
 
@@ -812,7 +962,7 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
             state_machine_->notify_state_machine();
 
             // 通知等待的客户端
-            this->consensus_notify();
+            this->client_notify();
         }
 
         return 0;
@@ -837,7 +987,7 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
 
     // schedule AppendEntries RPC again for specific Peer
     send_append_entries(*peer_ptr);
-    
+
     return 0;
 }
 
@@ -863,19 +1013,19 @@ int RaftConsensus::continue_install_snapshot_bf_async(const Raft::InstallSnapsho
 
     auto iter = peer_set_.find(response.peer_id());
     if (iter == peer_set_.end()) {
-        roo::log_err("AppendEntries received response outside of cluster with id %lu.", response.peer_id());
-        return -1;
+        std::string msg = roo::va_format("InstallSnapshot received response outside of cluster with id %lu.", response.peer_id());
+        PANIC(msg.c_str());
     }
-
-
     auto peer_ptr = iter->second;
-    
+    peer_ptr->set_latest_epoch(response.epoch());
+    this->client_notify();
+
     // 传输成功，执行和append_entries一样的响应处理
-    if(response.has_bytes_stored()) {
+    if (response.has_bytes_stored()) {
 
         uint64_t old_match_index = peer_ptr->match_index();
         uint64_t old_next_index  = peer_ptr->next_index();
-        
+
         // 设置peer对应的next_index和match_index
         peer_ptr->set_match_index(context_->last_included_index());
         peer_ptr->set_next_index(context_->last_included_index() + 1);
@@ -913,7 +1063,7 @@ int RaftConsensus::continue_install_snapshot_bf_async(const Raft::InstallSnapsho
             state_machine_->notify_state_machine();
 
             // 通知等待的客户端
-            this->consensus_notify();
+            this->client_notify();
         }
 
         return 0;
@@ -936,6 +1086,7 @@ int RaftConsensus::send_request_vote() {
     auto last_entry_term_index = log_meta_->last_term_and_index();
     request.set_last_log_term(last_entry_term_index.first);
     request.set_last_log_index(last_entry_term_index.second);
+    request.set_epoch(context_->epoch());
 
     roo::log_info("RequestVote RPC, term %lu, candidate_id %lu, last_log_term %lu, last_log_index %lu.",
                   request.term(), request.candidate_id(), request.last_log_term(), request.last_log_index());
@@ -994,6 +1145,7 @@ int RaftConsensus::send_append_entries(const Peer& peer) {
     request.set_leader_id(context_->id());
     request.set_prev_log_term(prev_log_term);
     request.set_prev_log_index(prev_log_index);
+    request.set_epoch(context_->epoch());
 
     roo::log_info("AppendEntries RPC, term %lu, leader_id %lu, prev_log_term %lu, prev_log_index %lu.",
                   request.term(), context_->id(), request.prev_log_term(), request.prev_log_index());
@@ -1035,17 +1187,17 @@ int RaftConsensus::send_install_snapshot(const Peer& peer) {
     std::string content;
     uint64_t last_included_index = 0;
     uint64_t last_included_term  = 0;
-    if(!state_machine_->load_snapshot(content, last_included_index, last_included_term)) {
+    if (!state_machine_->load_snapshot(content, last_included_index, last_included_term)) {
         roo::log_err("load_snapshot failed.");
         return -1;
     }
 
     // 校验context_中保留的last_included信息和实际snapshot文件中的last_included信息
-    if(last_included_index != context_->last_included_index() ||
-       last_included_term  != context_->last_included_term()) {
+    if (last_included_index != context_->last_included_index() ||
+        last_included_term  != context_->last_included_term()) {
         roo::log_err("snapshot file meta data doesnot match with context info.");
         roo::log_err("snapshot index %lu, term %lu; context index %lu, term %lu.",
-        last_included_index, last_included_term, context_->last_included_index(), context_->last_included_term());
+                     last_included_index, last_included_term, context_->last_included_index(), context_->last_included_term());
 
         context_->set_last_included_index(last_included_index);
         context_->set_last_included_term(last_included_term);
@@ -1053,22 +1205,23 @@ int RaftConsensus::send_install_snapshot(const Peer& peer) {
 
     // start_index和last_include中的日志覆盖不能有间隙
     // 正常处理逻辑不应该有这种数据不一致的情况
-    if(context_->last_included_index() < log_meta_->start_index() -1 ) {
-        std::string msg = roo::va_format("Invalid snapshot %lu and start_index %lu.", 
-        context_->last_included_index(), log_meta_->start_index());
+    if (context_->last_included_index() < log_meta_->start_index() - 1) {
+        std::string msg = roo::va_format("Invalid snapshot %lu and start_index %lu.",
+                                         context_->last_included_index(), log_meta_->start_index());
         PANIC(msg.c_str());
     }
 
     request.set_data(content);
     request.set_last_included_index(last_included_index);
     request.set_last_included_term(last_included_term);
+    request.set_epoch(context_->epoch());
 
     roo::log_info("InstallSnapshot RPC, term %lu, leader_id %lu, last_included_index %lu, last_included_term %lu.",
                   request.term(), request.leader_id(), request.last_included_index(), request.last_included_term());
 
     std::string str_request;
     roo::ProtoBuf::marshalling_to_string(request, &str_request);
-    
+
     peer.send_raft_RPC(tzrpc::ServiceID::RAFT_SERVICE, Raft::OpCode::kInstallSnapshot, str_request);
     return 0;
 }
@@ -1080,7 +1233,7 @@ void RaftConsensus::main_thread_loop() {
 
         {
             std::unique_lock<std::mutex> lock(consensus_mutex_);
-                        
+
             auto expire_tp = steady_clock::now() + std::chrono::milliseconds(100);
 #if __cplusplus >= 201103L
             consensus_notify_.wait_until(lock, expire_tp);

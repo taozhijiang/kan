@@ -197,12 +197,12 @@ void ControlService::control_snapshot_impl(std::shared_ptr<RpcInstance> rpc_inst
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
-    
+
     sisyphus::Control::ControlSnapshotOps::Response response;
     response.set_code(0);
     response.set_msg("OK");
-        
-    if(request.has_snapshot()) {
+
+    if (request.has_snapshot()) {
 
         roo::log_info("Receive ControlSnapshotOps Snapshot request.");
         int ret = Captain::instance().raft_consensus_ptr_->state_machine_snapshot();
@@ -214,7 +214,7 @@ void ControlService::control_snapshot_impl(std::shared_ptr<RpcInstance> rpc_inst
 
         uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
         response.mutable_snapshot()->set_hint("current_leader:" + std::to_string(
-                static_cast<long long unsigned int>(leader_id)));
+                                                  static_cast<long long unsigned int>(leader_id)));
     }
 
     std::string response_str;
@@ -231,21 +231,21 @@ void ControlService::control_stat_impl(std::shared_ptr<RpcInstance> rpc_instance
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
-    
+
     sisyphus::Control::ControlStatOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
-    
+
     // 返回报文格式
     sisyphus::Control::ControlStatOps::Response response;
     response.set_code(0);
     response.set_msg("OK");
-        
+
     if (request.has_stat()) {
-        
+
         std::string context;
         int ret = Captain::instance().raft_consensus_ptr_->cluster_stat(context);
         if (ret != 0) {

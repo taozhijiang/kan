@@ -57,9 +57,9 @@ public:
 
     RaftConsensus() :
         consensus_mutex_(),
-		consensus_notify_(),
-		client_mutex_(),
-		client_notify_(),
+        consensus_notify_(),
+        client_mutex_(),
+        client_notify_(),
         peer_set_(),
         log_meta_(),
         option_(),
@@ -85,11 +85,12 @@ public:
     std::shared_ptr<Peer> get_peer(uint64_t peer_id) const;
 
     int state_machine_modify(const std::string& cmd, std::string& apply_out);
+    int state_machine_query(const std::string& cmd, std::string& query_out);
     int state_machine_snapshot();
     int cluster_stat(std::string& stat);
-	
+
     void consensus_notify() { consensus_notify_.notify_all(); }
-	void client_notify() { client_notify_.notify_all(); }
+    void client_notify() { client_notify_.notify_all(); }
 
 private:
 
@@ -100,15 +101,17 @@ private:
 
     // 处理Peer发过来的RPC请求
     int handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
-                                        Raft::RequestVoteOps::Response& response);
+                                    Raft::RequestVoteOps::Response& response);
     int handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
-                                          Raft::AppendEntriesOps::Response& response);
+                                      Raft::AppendEntriesOps::Response& response);
     int handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
-                                            Raft::InstallSnapshotOps::Response& response);
+                                        Raft::InstallSnapshotOps::Response& response);
 
     // Leader检查cluster的日志状态
     // 当日志复制到绝大多数节点(next_index)的时候，就将其确认为提交的
     uint64_t advance_commit_index() const;
+
+    uint64_t advance_epoch() const;
 
     int send_request_vote();
     int send_append_entries();
@@ -125,11 +128,11 @@ private:
     std::mutex consensus_mutex_;
     std::condition_variable consensus_notify_;
 
-	// 用于除上面互斥和信号量保护之外的用途，主要是客户端请求需要
-	// 改变状态机的时候
+    // 用于除上面互斥和信号量保护之外的用途，主要是客户端请求需要
+    // 改变状态机的时候
     std::mutex client_mutex_;
-    std::condition_variable client_notify_;	
-	
+    std::condition_variable client_notify_;
+
     // Timer
     SimpleTimer heartbeat_timer_;
     SimpleTimer election_timer_;

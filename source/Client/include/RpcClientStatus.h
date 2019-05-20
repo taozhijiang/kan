@@ -53,7 +53,7 @@ enum class RpcClientStatus : uint8_t {
 
     RPC_CALL_TIMEOUT      = 20,
     RECV_FORMAT_ERROR     = 21,      // 接收的报文解析错误
-
+    PROTOBUF_FORMAT_ERROR = 22,      // ProtoBuf序列化和反序列化失败
 
 };
 

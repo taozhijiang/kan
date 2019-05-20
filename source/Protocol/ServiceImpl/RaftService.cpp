@@ -19,7 +19,7 @@ using sisyphus::Captain;
 bool RaftService::init() {
 
     auto setting_ptr = Captain::instance().setting_ptr_->get_setting();
-    if(!setting_ptr) {
+    if (!setting_ptr) {
         roo::log_err("Setting not initialized? return setting_ptr empty!!!");
         return false;
     }
@@ -28,9 +28,9 @@ bool RaftService::init() {
 
     try {
 
-        const libconfig::Setting &rpc_services = setting_ptr->lookup("rpc.services");
+        const libconfig::Setting& rpc_services = setting_ptr->lookup("rpc.services");
 
-        for(int i = 0; i < rpc_services.getLength(); ++i) {
+        for (int i = 0; i < rpc_services.getLength(); ++i) {
 
             const libconfig::Setting& service = rpc_services[i];
 
@@ -58,13 +58,13 @@ bool RaftService::init() {
             }
         }
 
-    } catch (const libconfig::SettingNotFoundException &nfex) {
+    } catch (const libconfig::SettingNotFoundException& nfex) {
         roo::log_err("rpc.services not found!");
     } catch (std::exception& e) {
         roo::log_err("execptions catched for %s",  e.what());
     }
 
-    if(!init_success) {
+    if (!init_success) {
         roo::log_err("instance %s init failed, may not configure for it?", instance_name_.c_str());
     }
 
@@ -109,9 +109,9 @@ int RaftService::module_runtime(const libconfig::Config& conf) {
 
     try {
 
-        const libconfig::Setting &rpc_services = conf.lookup("rpc_services");
+        const libconfig::Setting& rpc_services = conf.lookup("rpc_services");
 
-        for(int i = 0; i < rpc_services.getLength(); ++i) {
+        for (int i = 0; i < rpc_services.getLength(); ++i) {
 
             const libconfig::Setting& service = rpc_services[i];
             std::string instance_name;
@@ -124,7 +124,7 @@ int RaftService::module_runtime(const libconfig::Config& conf) {
             }
         }
 
-    } catch (const libconfig::SettingNotFoundException &nfex) {
+    } catch (const libconfig::SettingNotFoundException& nfex) {
         roo::log_err("rpc_services not found!");
     } catch (std::exception& e) {
         roo::log_err("execptions catched for %s",  e.what());
@@ -178,8 +178,8 @@ void RaftService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
         default:
             roo::log_err("Received RPC request with unknown opcode %u: "
-                    "rejecting it as invalid request",
-                    rpc_instance->get_opcode());
+                         "rejecting it as invalid request",
+                         rpc_instance->get_opcode());
             rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
     }
 }

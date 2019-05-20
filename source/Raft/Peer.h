@@ -38,9 +38,10 @@ public:
         std::stringstream ss;
         ss  << "Peer Info: " << std::endl
             << "    id: " << id_ << std::endl
-            << "    addr&port: " << addr_ << " " << port_ << std::endl
+            << "    addr port: " << addr_ << " " << port_ << std::endl
             << "    next_index: " << next_index_ << std::endl
-            << "    match_index: " << match_index_ << std::endl;
+            << "    match_index: " << match_index_ << std::endl
+            << "    latest_epoch: " << latest_epoch_ << std::endl;
 
         return ss.str();
     }
@@ -51,9 +52,11 @@ public:
 
     uint64_t next_index() const { return next_index_; }
     uint64_t match_index() const { return match_index_; }
+    uint64_t latest_epoch() const { return latest_epoch_; }
 
     void set_next_index(uint64_t index) { next_index_ = index; }
     void set_match_index(uint64_t index) { match_index_ = index; }
+    void set_latest_epoch(uint64_t epoch) { latest_epoch_ = epoch; }
 
 private:
     const uint64_t id_;
@@ -76,6 +79,8 @@ private:
 
     // 发现Peer在安装快照可能会占用不少的时间，
     bool install_snapshot_;
+
+    uint64_t latest_epoch_;
 
     friend std::ostream& operator<<(std::ostream& os, const Peer& peer);
 

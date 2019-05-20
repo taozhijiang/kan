@@ -222,25 +222,16 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
     }
 
     // 如果是Leader，则直接处理请求
-    sisyphus::Client::StateMachineSelectOps::Request  request;
-    if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
-        roo::log_err("unmarshal request failed.");
-        rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
-        return;
-    }
-
-    
-    sisyphus::Client::StateMachineSelectOps::Response response;
-    int ret = Captain::instance().raft_consensus_ptr_->kv_store_->select_handle(request, response);
+    std::string response_str;
+    int ret = Captain::instance().raft_consensus_ptr_->state_machine_query(rpc_request_message.payload_, response_str);
     if (ret != 0) {
         roo::log_err("handle StateMachineSelectOps return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
         return;
     }
 
-    std::string response_str;
-    roo::ProtoBuf::marshalling_to_string(response, &response_str);
     rpc_instance->reply_rpc_message(response_str);
+    return;
 }
 
 // 该接口是异步处理的，Raft将其创建为日志处理
@@ -281,31 +272,17 @@ void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance
         return;
     }
 
-    if (!Captain::instance().raft_consensus_ptr_->is_leader()) {
-        uint64_t leader_id = Captain::instance().raft_consensus_ptr_->current_leader();
-        roo::log_warning("Bad, The leader is %lu", leader_id);
-        rpc_instance->reject(RpcResponseStatus::NOT_LEADER);
-        return;
-    }
-
     // 尝试创建日志，其内容是protobuf序列化的字符串，状态机需要解析处理
-    std::string context;
-    int ret = Captain::instance().raft_consensus_ptr_->state_machine_modify(rpc_request_message.payload_, context);
+    std::string response_str;
+    int ret = Captain::instance().raft_consensus_ptr_->state_machine_modify(rpc_request_message.payload_, response_str);
     if (ret != 0) {
         roo::log_err("handle Raft append_entries return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
         return;
     }
 
-    // 返回异步处理成功
-    sisyphus::Client::StateMachineUpdateOps::Response response;
-    response.set_code(0);
-    response.set_msg("OK");
-    response.set_context(context);
-
-    std::string response_str;
-    roo::ProtoBuf::marshalling_to_string(response, &response_str);
     rpc_instance->reply_rpc_message(response_str);
+    return;
 }
 
 

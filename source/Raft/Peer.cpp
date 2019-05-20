@@ -28,7 +28,8 @@ Peer::Peer(uint64_t id,
     rpc_client_(),
     rpc_proxy_(),
     next_index_(0),
-    match_index_(0) {
+    match_index_(0),
+    latest_epoch_(0) {
 
     RpcClientSetting setting{};
     setting.serv_addr_ = addr_;

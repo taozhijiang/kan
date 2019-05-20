@@ -13,10 +13,10 @@
 namespace tzrpc {
 
 class RaftService : public Service,
-                        public RpcServiceBase {
+    public RpcServiceBase {
 
 public:
-    explicit RaftService(const std::string& instance_name):
+    explicit RaftService(const std::string& instance_name) :
         RpcServiceBase(instance_name),
         instance_name_(instance_name) {
     }

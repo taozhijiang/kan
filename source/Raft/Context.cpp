@@ -25,7 +25,8 @@ Context::Context(uint64_t id, std::unique_ptr<LogIf>& log_meta) :
     role_(Role::kFollower),
     commit_index_(0),
     last_included_index_(0),
-    last_included_term_(0) {
+    last_included_term_(0),
+    epoch_(0) {
 
 }
 
@@ -88,9 +89,10 @@ std::string Context::str() const {
         << "   term: " << term_ << std::endl
         << "   voted_for: " << voted_for_ << std::endl
         << "   role: " << RoleStr(role_) << std::endl
-        << "   commit_index:" << commit_index_ << std::endl
-        << "   last_included_index:" << last_included_index_ << std::endl
-        << "   last_included_term:" << last_included_term_ << std::endl;
+        << "   commit_index: " << commit_index_ << std::endl
+        << "   last_included_index: " << last_included_index_ << std::endl
+        << "   last_included_term: " << last_included_term_ << std::endl
+        << "   epoch: " << epoch_ << std::endl;
 
     return ss.str();
 }

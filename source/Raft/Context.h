@@ -44,12 +44,14 @@ public:
     uint64_t quorum_count() const { return quorum_granted_.size(); }
     uint64_t commit_index() const { return commit_index_; }
     Role role() const { return role_; }
+    uint64_t epoch() const { return epoch_; }
 
     void set_leader_id(uint64_t leader_id) { leader_id_ = leader_id; }
     void set_term(uint64_t term) { term_ = term; }
     void set_voted_for(uint64_t voted_for) { voted_for_ = voted_for; }
     void add_quorum_granted(uint64_t peer_id) { quorum_granted_.insert(peer_id); }
     void set_commit_index(uint64_t commit_index) { commit_index_ = commit_index; }
+    uint64_t inc_epoch() { return ++epoch_; }
 
     // 集群中节点角色切换
     // same as stepdown
@@ -88,6 +90,10 @@ private:
     uint64_t last_included_index_;
     uint64_t last_included_term_;
 
+    // 当Leader取消确认自己是否是有效的Leader的时候，递增这个值，然后发送一个rpc给所有的Peer，其他Peer
+    // 成功响应的时候更新这个值。
+    // 如果Leader能够在大多数节点上检测到成功更新了该值，那么自己就是一个有效的Leader
+    uint64_t epoch_;
 
     friend std::ostream& operator<<(std::ostream& os, const Context& context);
 };
