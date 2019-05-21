@@ -39,11 +39,18 @@ bool RaftConsensus::init() {
 
     uint64_t heartbeat_ms;
     uint64_t election_timeout_ms;
+    uint64_t raft_distr_timeout_ms;
     setting_ptr->lookupValue("Raft.heartbeat_ms", heartbeat_ms);
     setting_ptr->lookupValue("Raft.election_timeout_ms", election_timeout_ms);
+    setting_ptr->lookupValue("Raft.raft_distr_timeout_ms", raft_distr_timeout_ms);
     option_.heartbeat_ms_ = duration(heartbeat_ms);
     option_.election_timeout_ms_ = duration(election_timeout_ms);
+    option_.raft_distr_timeout_ms_ = duration(raft_distr_timeout_ms);
 
+    // 作为必填配置参数处理
+    if(option_.raft_distr_timeout_ms_.count() == 0)
+        option_.raft_distr_timeout_ms_ = option_.election_timeout_ms_;
+    
     // if not found, will throw exceptions
     const libconfig::Setting& peers = setting_ptr->lookup("Raft.cluster_peers");
     for (int i = 0; i < peers.getLength(); ++i) {
@@ -79,6 +86,7 @@ bool RaftConsensus::init() {
     roo::log_info("Current setting dump for node %lu:\n %s", option_.id_, option_.str().c_str());
 
     // 随机化选取超时定时器
+    ::srand(::time(NULL) + option_.id_);
     if (option_.election_timeout_ms_.count() > 3)
         option_.election_timeout_ms_ += duration(::random() % (option_.election_timeout_ms_.count() / 3));
 
@@ -139,6 +147,8 @@ bool RaftConsensus::init() {
         context_->set_commit_index(meta.commit_index());
 
     context_->update_meta();
+    roo::log_warning("startup with meta info, term %lu, voted_for %lu, commit_index %lu",
+                     context_->term(), context_->voted_for(), context_->commit_index());
 
     // bootstrap ???
     if (option_.bootstrap_) {
@@ -201,8 +211,10 @@ bool RaftConsensus::is_leader() const {
 int RaftConsensus::cluster_stat(std::string& stat) {
     std::stringstream ss;
 
-    ss << "cluster stat current node:" << std::endl
-        << context_->str() << std::endl;
+    ss << std::endl
+       << "cluster stat current node: " << std::endl
+       << context_->str() << std::endl
+       << option_.str() << std::endl;
 
     if (is_leader()) {
         for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter) {
@@ -227,6 +239,8 @@ std::shared_ptr<Peer> RaftConsensus::get_peer(uint64_t peer_id) const {
 }
 
 // 不能持锁，否则快照时间过长会导致各种定时器超时
+// 这边还是手动触发执行快照的，实测在200W条日志压缩后删除的时候，大概需要3s的时长，这
+// 会触发超时，导致快照的机器失去Leader
 int RaftConsensus::state_machine_snapshot() {
 
     uint64_t last_included_index = 0;
@@ -352,7 +366,8 @@ int RaftConsensus::state_machine_query(const std::string& cmd, std::string& quer
         }
 
         if (state_machine_->apply_index() < aim_index) {
-            roo::log_err("wait for state_machine apply entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+            roo::log_err("wait for state_machine apply entry %lu about %lu msec(s) timeout happens.", 
+                         aim_index, option_.raft_distr_timeout_ms_.count());
             return -1;
         }
     }
@@ -445,7 +460,8 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
         }
 
         if (context_->commit_index() < aim_index) {
-            roo::log_err("replicate entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+            roo::log_err("replicate entry %lu about %lu msec(s) timeout happens.", 
+                         aim_index, option_.raft_distr_timeout_ms_.count());
             return -1;
         }
     }
@@ -459,6 +475,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
 
 
         std::unique_lock<std::mutex> lock(client_mutex_);
+
         // no_timeout wakeup by notify_all, notify_one, or spuriously
         // timeout    wakeup by timeout expiration
         while (state_machine_->apply_index() < aim_index) {
@@ -475,7 +492,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
         }
 
         if (state_machine_->apply_index() < aim_index) {
-            roo::log_err("wait for state_machine apply entry %lu about %lu sec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
+            roo::log_err("entry %lu about %lu msec(s) timeout happens.", aim_index, option_.raft_distr_timeout_ms_.count());
             return -1;
         }
     }
@@ -605,6 +622,7 @@ int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::R
     response.set_term(context_->term());
     response.set_success(false);
     response.set_last_log_index(log_meta_->last_index());
+
     if (request.term() < context_->term()) {
         roo::log_warning("AppendEntriesOps failed, recevied smaller term %lu compared with our %lu.",
                          request.term(), context_->term());
@@ -617,6 +635,7 @@ int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::R
 
         // bump up our term
         context_->set_term(request.term());
+        context_->update_meta();
         response.set_term(context_->term());
     }
 
@@ -644,6 +663,9 @@ int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::R
                      "so we reject this entry, and leader will override it later!",
                      request.prev_log_index(),
                      request.prev_log_term(), log_meta_->entry(request.prev_log_index())->term());
+        log_meta_->truncate_suffix(log_meta_->last_index() -1);
+        response.set_last_log_index(log_meta_->last_index());
+
         response.set_success(false);
         return 0;
     }
@@ -720,6 +742,8 @@ int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOp
 
         // bump up our term
         context_->set_term(request.term());
+        context_->update_meta();
+        
         response.set_term(context_->term());
     }
 

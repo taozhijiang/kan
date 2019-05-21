@@ -83,8 +83,11 @@ void StateMachine::state_machine_loop() {
         }
 
         // 伪唤醒，无任何处理
-        if (commit_index_ == apply_index_)
+        // 但是防止客户端死锁，还是通知一下
+        if (commit_index_ == apply_index_) {
+            raft_consensus_.client_notify();
             continue;
+        }
 
         LogIf::EntryPtr entry = log_meta_->entry(apply_index_ + 1);
         if (entry->type() == Raft::EntryType::kNoop) {

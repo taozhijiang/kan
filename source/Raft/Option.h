@@ -73,6 +73,10 @@ struct Option {
             withhold_votes_ms_.count() <= 100 )
             return false;
 
+        // 作为必选参数处理
+        if (raft_distr_timeout_ms_.count() == 0)
+                return false;
+            
         return true;
     }
 
