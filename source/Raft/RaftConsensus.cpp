@@ -276,6 +276,11 @@ int RaftConsensus::state_machine_snapshot() {
 // 必须确保当前是有效的Leader节点，同时取到请求时候的最新commit_index，
 // 依据该commit_index取出apply_index后对应的执行结果，得到的内容才能够
 // 保证是线性一致性的
+
+// 这里实现的逻辑其实就是ReadIndex Read，这里简单的将Leader读取的值传递给了其他的
+// Fellower，其实也可以Leader只负责心跳后得到读时候的commit_index，然后将这个值传
+// 递给Fellower，等到Fellower自己Apply到这个点的时候，再本地读取状态机的值并返回客户端
+
 int RaftConsensus::state_machine_query(const std::string& cmd, std::string& query_out) {
 
     if (cmd.empty()) {
@@ -332,6 +337,12 @@ int RaftConsensus::state_machine_query(const std::string& cmd, std::string& quer
         }
 
         // 比如重新发生了选举操作
+
+        // 这可能是一个极端情况，当Leader选取成功后会发起一个Noop的日志并尝试提交它，当该日志提交
+        // 成功之前，Leader的commit_index可能不是最新的(即日志被复制到大多数机器上了，但是还没有advance_commit_index)，
+        // 所以这里要检查commit_indez的term是不是和当前term不一致，即commit_index还没有更新
+        // 虽然可以等待直到该值一直，但是直接返回失败让客户端重试也是个解决办法
+
         if (aim_term != context_->term()) {
             roo::log_err("Term changed when epoch check, previous %lu, current %lu", aim_term, context_->term());
             return -1;
