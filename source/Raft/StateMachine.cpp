@@ -68,6 +68,10 @@ void StateMachine::state_machine_loop() {
 #endif
         }
 
+        LogIf::EntryPtr entry {};
+
+again:
+
         if (snapshot_progress_ == SnapshotProgress::kBegin)
             snapshot_progress_ = SnapshotProgress::kProcessing;
 
@@ -89,7 +93,7 @@ void StateMachine::state_machine_loop() {
             continue;
         }
 
-        LogIf::EntryPtr entry = log_meta_->entry(apply_index_ + 1);
+        entry = log_meta_->entry(apply_index_ + 1);
         if (entry->type() == Raft::EntryType::kNoop) {
             roo::log_info("Skip NOOP type entry at term %lu, current processing apply_index %lu.",
                           entry->term(), apply_index_ + 1);
@@ -112,6 +116,15 @@ void StateMachine::state_machine_loop() {
         // step forward apply_index
         ++apply_index_;
         log_meta_->set_meta_apply_index(apply_index_);
+
+        // 如果提交队列有大量的日志需要执行，则不进行上述notify的等待
+        if (commit_index_ > apply_index_) {
+            if (apply_index_ % 20 == 0)
+                raft_consensus_.client_notify();
+
+            goto again;
+        }
+
 
         raft_consensus_.client_notify();
     }

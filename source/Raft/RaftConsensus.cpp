@@ -216,6 +216,8 @@ int RaftConsensus::cluster_stat(std::string& stat) {
        << context_->str() << std::endl
        << option_.str() << std::endl;
 
+    ss << "apply_index: " << state_machine_->apply_index() << std::endl;
+    
     if (is_leader()) {
         for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter) {
             ss << std::endl
