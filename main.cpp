@@ -77,13 +77,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    (void)sisyphus::Captain::instance(); // create object first!
+    (void)kan::Captain::instance(); // create object first!
 
     create_process_pid();
     init_signal_handle();
     roo::backtrace_init();
 
-    if(!sisyphus::Captain::instance().init(cfgFile)) {
+    if(!kan::Captain::instance().init(cfgFile)) {
         roo::log_err("system manager init error!");
         ::exit(EXIT_FAILURE);
     }
@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
     roo::log_warning("service started at %s.", mbstr);
     roo::log_warning("service initialized successfully!");
 
-    sisyphus::Captain::instance().service_joinall();
+    kan::Captain::instance().service_joinall();
 
     roo::Ssl_thread_clean();
 

@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     if (::strncmp(argv[1], "snapshot", 8) == 0) {
 
         std::string mar_str;
-        sisyphus::Control::ControlSnapshotOps::Request request;
+        kan::Control::ControlSnapshotOps::Request request;
         request.mutable_snapshot()->set_hint("sp");
         if (!roo::ProtoBuf::marshalling_to_string(request, &mar_str)) {
             std::cerr << "marshalling message failed." << std::endl;
@@ -52,14 +52,14 @@ int main(int argc, char* argv[]) {
 
         std::string resp_str;
         auto status = client.call_RPC(tzrpc::ServiceID::CONTROL_SERVICE,
-                                      sisyphus::Control::OpCode::kSnapshot,
+                                      kan::Control::OpCode::kSnapshot,
                                       mar_str, resp_str);
         if (status != RpcClientStatus::OK) {
             std::cerr << "call failed, return code [" << static_cast<uint8_t>(status) << "]" << std::endl;
             return -1;
         }
 
-        sisyphus::Control::ControlSnapshotOps::Response response;
+        kan::Control::ControlSnapshotOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(resp_str, &response)) {
             std::cerr << "unmarshalling message failed." << std::endl;
             return -1;
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
     } else if (::strncmp(argv[1], "stat", 4) == 0) {
 
         std::string mar_str;
-        sisyphus::Control::ControlStatOps::Request request;
+        kan::Control::ControlStatOps::Request request;
         request.mutable_stat()->set_hint("st");
         if (!roo::ProtoBuf::marshalling_to_string(request, &mar_str)) {
             std::cerr << "marshalling message failed." << std::endl;
@@ -84,14 +84,14 @@ int main(int argc, char* argv[]) {
 
         std::string resp_str;
         auto status = client.call_RPC(tzrpc::ServiceID::CONTROL_SERVICE,
-                                      sisyphus::Control::OpCode::kStat,
+                                      kan::Control::OpCode::kStat,
                                       mar_str, resp_str);
         if (status != RpcClientStatus::OK) {
             std::cerr << "call failed, return code [" << static_cast<uint8_t>(status) << "]" << std::endl;
             return -1;
         }
 
-        sisyphus::Control::ControlStatOps::Response response;
+        kan::Control::ControlStatOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(resp_str, &response)) {
             std::cerr << "unmarshalling message failed." << std::endl;
             return -1;

@@ -1,5 +1,5 @@
 syntax="proto2";
-package sisyphus.Client;
+package kan.Client;
 
 enum OpCode {
     kSelect     = 1;

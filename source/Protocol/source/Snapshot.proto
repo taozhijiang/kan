@@ -1,5 +1,5 @@
 syntax="proto2";
-package sisyphus.Snapshot;
+package kan.Snapshot;
 
 // 涉及到状态机的序列化和反序列化使用
 

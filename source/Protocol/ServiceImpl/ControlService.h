@@ -65,6 +65,6 @@ private:
 
 };
 
-} // namespace sisyphus
+} // namespace tzrpc
 
 #endif // __PROTOCOL_CONTROL_SERVICE_H__

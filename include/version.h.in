@@ -1,6 +1,6 @@
-#ifndef __SISYPHUS_CONFIG_H__
-#define __SISYPHUS_CONFIG_H__
+#ifndef __KAN_CONFIG_H__
+#define __KAN_CONFIG_H__
 
 static const char* PROGRAM_VERSION = "@PROGRAM_VERSION@";
 
-#endif // __SISYPHUS_CONFIG_H__
+#endif // __KAN_CONFIG_H__

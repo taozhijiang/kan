@@ -15,7 +15,7 @@
 
 // Raft相关的配置参数
 
-namespace sisyphus {
+namespace kan {
 
 struct Option {
 
@@ -100,6 +100,6 @@ struct Option {
 
 
 
-} // namespace sisyphus
+} // namespace kan
 
 #endif // __RAFT_OPTION_H__

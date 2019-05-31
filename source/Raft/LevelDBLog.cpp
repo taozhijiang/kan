@@ -16,7 +16,7 @@
 #include <Raft/LevelDBLog.h>
 
 
-namespace sisyphus {
+namespace kan {
 
 using roo::Endian;
 
@@ -322,4 +322,4 @@ int LevelDBLog::set_meta_apply_index(uint64_t apply_index) const {
 }
 
 
-} // namespace sisyphus
+} // namespace kan

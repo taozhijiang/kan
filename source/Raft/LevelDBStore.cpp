@@ -16,7 +16,7 @@
 #include <Raft/LevelDBStore.h>
 
 
-namespace sisyphus {
+namespace kan {
 
 
 LevelDBStore::LevelDBStore(const std::string& db_path, const std::string& snapshot_path) :
@@ -377,4 +377,4 @@ bool LevelDBStore::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
 
 
 
-} // namespace sisyphus
+} // namespace kan

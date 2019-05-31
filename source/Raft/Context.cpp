@@ -12,7 +12,7 @@
 #include <Raft/LogIf.h>
 
 
-namespace sisyphus {
+namespace kan {
 
 
 Context::Context(uint64_t id, std::unique_ptr<LogIf>& log_meta) :
@@ -105,4 +105,4 @@ std::ostream& operator<<(std::ostream& os, const Context& context) {
 
 
 
-} // namespace sisyphus
+} // namespace kan

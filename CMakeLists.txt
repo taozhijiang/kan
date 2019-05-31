@@ -92,7 +92,7 @@ exec_program( "export BUILD_VAR=`git log -1 --pretty=%cd` && echo 'const char *b
 exec_program( "export BUILD_VAR=`git log -1 --pretty=\"%an %ae\"` && echo 'const char *build_commit_author = \"VCS: Author:' $BUILD_VAR '\";' >> build_version.cpp ")
 exec_program( "export BUILD_VAR=`date +%F` && echo 'const char *build_time = \"Build At:' $BUILD_VAR '\";' >> build_version.cpp ")
 
-add_executable( sisyphus_service main.cpp setup.cpp build_version.cpp source/Captain.cpp )
+add_executable( kan_service main.cpp setup.cpp build_version.cpp source/Captain.cpp )
 
 # ld iconv ?
 
@@ -110,7 +110,7 @@ set (EXTRA_LIBS ${EXTRA_LIBS} leveldb snappy )
 
 # 某些库需要静态全连接，否则主服务没使用但是so使用，会报符号没有找到
 target_link_libraries(
-    sisyphus_service -lrt
+    kan_service -lrt
     ${EXTRA_LIBS}
 )
 

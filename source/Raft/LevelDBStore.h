@@ -22,7 +22,7 @@
 
 // 用来进行实际业务数据存储的LevelDB实例
 
-namespace sisyphus {
+namespace kan {
 
 class LevelDBStore : public StoreIf {
 
@@ -62,6 +62,6 @@ protected:
     mutable boost::shared_mutex kv_lock_;
 };
 
-} // namespace sisyphus
+} // namespace kan
 
 #endif // __RAFT_LEVELDB_STORE_H__

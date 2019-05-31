@@ -19,7 +19,7 @@
 
 // 简易的KV存储支撑
 
-namespace sisyphus {
+namespace kan {
 
 
 enum class SnapshotProgress : uint8_t {
@@ -83,7 +83,7 @@ private:
 };
 
 
-}
+} // end namespace kan
 
 #endif // __RAFT_STATE_MACHINE__
 

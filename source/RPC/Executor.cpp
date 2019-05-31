@@ -17,7 +17,7 @@
 #include <concurrency/Timer.h>
 
 #include <Captain.h>
-using sisyphus::Captain;
+using kan::Captain;
 
 namespace tzrpc {
 

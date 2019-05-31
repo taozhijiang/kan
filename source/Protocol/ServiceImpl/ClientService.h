@@ -65,6 +65,6 @@ private:
 
 };
 
-} // namespace sisyphus
+} // namespace tzrpc
 
 #endif // __PROTOCOL_CLIENT_SERVICE_H__

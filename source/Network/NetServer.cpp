@@ -14,7 +14,7 @@
 #include <string/StrUtil.h>
 
 #include <Captain.h>
-using sisyphus::Captain;
+using kan::Captain;
 
 namespace tzrpc {
 

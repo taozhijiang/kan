@@ -18,7 +18,7 @@
 // 内部涉及到的Raft的定时器都采用这个时钟来驱动
 
 
-namespace sisyphus {
+namespace kan {
 
 
 #if __cplusplus >= 201103L
@@ -88,7 +88,7 @@ private:
     time_point start_;
 };
 
-} // namespace sisyphus
+} // namespace kan
 
 
 #endif // __RAFT_CLOCK_H__

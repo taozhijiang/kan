@@ -10,7 +10,7 @@
 
 #include <xtra_rhel.h>
 
-namespace sisyphus {
+namespace kan {
 
 enum class Role : uint8_t {
     kFollower   = 1,
@@ -98,7 +98,7 @@ private:
     friend std::ostream& operator<<(std::ostream& os, const Context& context);
 };
 
-} // namespace sisyphus
+} // namespace kan
 
 #endif // __RAFT_CONTEXT_H__
 

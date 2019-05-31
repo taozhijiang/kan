@@ -15,7 +15,7 @@
 
 // 集群中的每一个成员(除了本身)会使用Peer来管理
 
-namespace sisyphus {
+namespace kan {
 
 using tzrpc_client::rpc_handler_t;
 using tzrpc_client::RpcClient;
@@ -86,6 +86,6 @@ private:
 
 };
 
-} // namespace sisyphus
+} // namespace kan
 
 #endif // __RAFT_PEER_H__

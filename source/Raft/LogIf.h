@@ -17,7 +17,7 @@
 #ifndef __RAFT_LOGIF_H__
 #define __RAFT_LOGIF_H__
 
-namespace sisyphus {
+namespace kan {
 
 
 class LogIf {
@@ -25,8 +25,8 @@ class LogIf {
     __noncopyable__(LogIf)
 
 public:
-    typedef sisyphus::Raft::Entry                   Entry;
-    typedef sisyphus::RaftLogMetadata::Metadata     LogMeta;
+    typedef kan::Raft::Entry                   Entry;
+    typedef kan::RaftLogMetadata::Metadata     LogMeta;
 
     typedef std::shared_ptr<Entry>                  EntryPtr;
 
@@ -60,6 +60,6 @@ public:
 };
 
 
-} // namespace LogIf
+} // end namespace kan
 
 #endif // __RAFT_LOGIF_H__

@@ -16,7 +16,7 @@
 
 // 用来进行实际业务数据存储的LevelDB实例
 
-namespace sisyphus {
+namespace kan {
 
 class StoreIf {
 
@@ -42,6 +42,6 @@ public:
     virtual bool apply_snapshot(const Snapshot::SnapshotContent& snapshot) = 0;
 };
 
-} // namespace sisyphus
+} // namespace kan
 
 #endif // __RAFT_KV_STORE_H__

@@ -13,7 +13,7 @@
 
 namespace tzrpc {
 
-using sisyphus::Captain;
+using kan::Captain;
 
 
 bool ClientService::init() {
@@ -162,7 +162,7 @@ int ClientService::module_status(std::string& module, std::string& name, std::st
 
 void ClientService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    using sisyphus::Client::OpCode;
+    using kan::Client::OpCode;
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc_instance->get_opcode()) {
@@ -185,7 +185,7 @@ void ClientService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kSelect) {
+    if (rpc_request_message.header_.opcode != kan::Client::OpCode::kSelect) {
         roo::log_err("invalid opcode %u in service Client.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
@@ -238,7 +238,7 @@ void ClientService::client_select_impl(std::shared_ptr<RpcInstance> rpc_instance
 void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Client::OpCode::kUpdate) {
+    if (rpc_request_message.header_.opcode != kan::Client::OpCode::kUpdate) {
         roo::log_err("invalid opcode %u in service Client.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
@@ -286,4 +286,4 @@ void ClientService::client_update_impl(std::shared_ptr<RpcInstance> rpc_instance
 }
 
 
-} // namespace sisyphus
+} // namespace tzrpc

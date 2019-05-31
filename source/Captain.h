@@ -24,7 +24,7 @@ namespace tzrpc {
     class NetServer;
 }
 
-namespace sisyphus {
+namespace kan {
 
 
 class RaftConsensus;
@@ -65,7 +65,7 @@ public:
     std::shared_ptr<RaftConsensus> raft_consensus_ptr_;
 };
 
-} // end namespace sisyphus
+} // end namespace kan
 
 
 #endif //__CAPTAIN_H__

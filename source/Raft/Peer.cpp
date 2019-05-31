@@ -14,7 +14,7 @@
 #include <Captain.h>
 #include <concurrency/IoService.h>
 
-namespace sisyphus {
+namespace kan {
 
 using tzrpc_client::RpcClientStatus;
 using tzrpc_client::RpcClientSetting;
@@ -63,5 +63,5 @@ std::ostream& operator<<(std::ostream& os, const Peer& peer) {
 }
 
 
-} // namespace sisyphus
+} // namespace kan
 

@@ -12,7 +12,7 @@ using namespace ::testing;
 
 #include <roo/message/ProtoBuf.h>
 
-using namespace sisyphus;
+using namespace kan;
 using namespace tzrpc_client;
 
 class RaftRpcStub : public ::testing::Test {

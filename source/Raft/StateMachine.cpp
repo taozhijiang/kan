@@ -17,7 +17,7 @@
 #include <message/ProtoBuf.h>
 #include <Protocol/gen-cpp/Client.pb.h>
 
-namespace sisyphus {
+namespace kan {
 
 StateMachine::StateMachine(RaftConsensus& raft_consensus,
                            std::unique_ptr<LogIf>& log_meta, std::unique_ptr<StoreIf>& kv_store) :
@@ -137,7 +137,7 @@ int StateMachine::do_apply(LogIf::EntryPtr entry, std::string& content_out) {
 
     std::string instruction = entry->data();
 
-    sisyphus::Client::StateMachineUpdateOps::Request request;
+    kan::Client::StateMachineUpdateOps::Request request;
     if (!roo::ProtoBuf::unmarshalling_from_string(instruction, &request)) {
         roo::log_err("ProtoBuf unmarshal StateMachineWriteOps Request failed.");
         return -1;
@@ -239,4 +239,4 @@ bool StateMachine::apply_snapshot(const Snapshot::SnapshotContent& snapshot) {
     return result;
 }
 
-} // namespace
+} // namespace kan

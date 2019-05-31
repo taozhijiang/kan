@@ -33,7 +33,7 @@ class RaftService;
 class ClientService;
 }
 
-namespace sisyphus {
+namespace kan {
 
 using tzrpc_client::RpcClientStatus;
 class Clock;
@@ -53,7 +53,7 @@ class RaftConsensus {
 
 public:
 
-    typedef sisyphus::Raft::OpCode  OpCode;
+    typedef kan::Raft::OpCode  OpCode;
 
     RaftConsensus() :
         consensus_mutex_(),
@@ -155,6 +155,6 @@ private:
     std::unique_ptr<StoreIf>      kv_store_;
 };
 
-} // namespace sisyphus
+} // namespace kan
 
 #endif // __RAFT_RAFT_CONSENSUS_H__

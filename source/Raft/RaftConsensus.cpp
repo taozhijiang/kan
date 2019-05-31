@@ -21,7 +21,7 @@
 
 #include "RaftConsensus.h"
 
-namespace sisyphus {
+namespace kan {
 
 
 bool RaftConsensus::init() {
@@ -1322,4 +1322,4 @@ void RaftConsensus::main_thread_loop() {
     }
 }
 
-} // namespace sisyphus
+} // namespace kan

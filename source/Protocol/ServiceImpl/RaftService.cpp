@@ -13,7 +13,7 @@
 
 namespace tzrpc {
 
-using sisyphus::Captain;
+using kan::Captain;
 
 
 bool RaftService::init() {
@@ -162,7 +162,7 @@ int RaftService::module_status(std::string& module, std::string& name, std::stri
 
 void RaftService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    using sisyphus::Raft::OpCode;
+    using kan::Raft::OpCode;
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc_instance->get_opcode()) {
@@ -188,20 +188,20 @@ void RaftService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 void RaftService::request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Raft::OpCode::kRequestVote) {
+    if (rpc_request_message.header_.opcode != kan::Raft::OpCode::kRequestVote) {
         roo::log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Raft::RequestVoteOps::Request  request;
+    kan::Raft::RequestVoteOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Raft::RequestVoteOps::Response response;
+    kan::Raft::RequestVoteOps::Response response;
     int ret = Captain::instance().raft_consensus_ptr_->handle_request_vote_request(request, response);
     if (ret != 0) {
         roo::log_err("handle request_vote return %d", ret);
@@ -217,20 +217,20 @@ void RaftService::request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 void RaftService::append_entries_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Raft::OpCode::kAppendEntries) {
+    if (rpc_request_message.header_.opcode != kan::Raft::OpCode::kAppendEntries) {
         roo::log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Raft::AppendEntriesOps::Request  request;
+    kan::Raft::AppendEntriesOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Raft::AppendEntriesOps::Response response;
+    kan::Raft::AppendEntriesOps::Response response;
     int ret = Captain::instance().raft_consensus_ptr_->handle_append_entries_request(request, response);
     if (ret != 0) {
         roo::log_err("handle append_entries return %d", ret);
@@ -247,20 +247,20 @@ void RaftService::install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instanc
 
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Raft::OpCode::kInstallSnapshot) {
+    if (rpc_request_message.header_.opcode != kan::Raft::OpCode::kInstallSnapshot) {
         roo::log_err("invalid opcode %u in service Raft.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Raft::InstallSnapshotOps::Request  request;
+    kan::Raft::InstallSnapshotOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Raft::InstallSnapshotOps::Response response;
+    kan::Raft::InstallSnapshotOps::Response response;
     int ret = Captain::instance().raft_consensus_ptr_->handle_install_snapshot_request(request, response);
     if (ret != 0) {
         roo::log_err("handle install_snapshot return %d", ret);
@@ -274,4 +274,4 @@ void RaftService::install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instanc
 }
 
 
-} // namespace sisyphus
+} // namespace tzrpc

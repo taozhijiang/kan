@@ -14,7 +14,7 @@
 #include <scaffold/Status.h>
 
 #include <Captain.h>
-using sisyphus::Captain;
+using kan::Captain;
 
 // API for main
 

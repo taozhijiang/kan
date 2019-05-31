@@ -16,7 +16,7 @@
 
 #include <Raft/LogIf.h>
 
-namespace sisyphus {
+namespace kan {
 
 class LevelDBLog : public LogIf {
 
@@ -66,6 +66,6 @@ protected:
     std::unique_ptr<leveldb::DB> log_meta_fp_;
 };
 
-} // namespace sisyphus
+} // end namespace kan
 
 #endif // __RAFT_LEVELDB_LOG_H__

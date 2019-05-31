@@ -9,7 +9,7 @@
 #include <scaffold/Setting.h>
 
 #include <Captain.h>
-using sisyphus::Captain;
+using kan::Captain;
 
 #include <RPC/Service.h>
 #include <RPC/Executor.h>

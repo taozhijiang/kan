@@ -1,5 +1,5 @@
 syntax="proto2";
-package sisyphus.Control;
+package kan.Control;
 
 enum OpCode {
     kSnapshot   = 1;

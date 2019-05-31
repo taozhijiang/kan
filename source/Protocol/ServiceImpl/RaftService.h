@@ -64,6 +64,6 @@ private:
 
 };
 
-} // namespace sisyphus
+} // namespace tzrpc
 
 #endif // __PROTOCOL_RAFT_SERVICE_H__

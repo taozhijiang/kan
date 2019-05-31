@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
 
         std::string key = argv[2];
         std::string mar_str;
-        sisyphus::Client::StateMachineSelectOps::Request request;
+        kan::Client::StateMachineSelectOps::Request request;
         request.mutable_read()->set_key(key);
         if (!roo::ProtoBuf::marshalling_to_string(request, &mar_str)) {
             std::cerr << "marshalling message failed." << std::endl;
@@ -54,14 +54,14 @@ int main(int argc, char* argv[]) {
 
         std::string resp_str;
         auto status = client.call_RPC(tzrpc::ServiceID::CLIENT_SERVICE,
-                                      sisyphus::Client::OpCode::kSelect,
+                                      kan::Client::OpCode::kSelect,
                                       mar_str, resp_str);
         if (status != RpcClientStatus::OK) {
             std::cerr << "call failed, return code [" << static_cast<uint8_t>(status) << "]" << std::endl;
             return -1;
         }
 
-        sisyphus::Client::StateMachineSelectOps::Response response;
+        kan::Client::StateMachineSelectOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(resp_str, &response)) {
             std::cerr << "unmarshalling message failed." << std::endl;
             return -1;
@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         std::string val = argv[3];
 
         std::string mar_str;
-        sisyphus::Client::StateMachineUpdateOps::Request request;
+        kan::Client::StateMachineUpdateOps::Request request;
         request.mutable_write()->set_key(key);
         request.mutable_write()->set_content(val);
         if (!roo::ProtoBuf::marshalling_to_string(request, &mar_str)) {
@@ -93,14 +93,14 @@ int main(int argc, char* argv[]) {
 
         std::string resp_str;
         auto status = client.call_RPC(tzrpc::ServiceID::CLIENT_SERVICE,
-                                      sisyphus::Client::OpCode::kUpdate,
+                                      kan::Client::OpCode::kUpdate,
                                       mar_str, resp_str);
         if (status != RpcClientStatus::OK) {
             std::cerr << "call failed, return code [" << static_cast<uint8_t>(status) << "]" << std::endl;
             return -1;
         }
 
-        sisyphus::Client::StateMachineUpdateOps::Response response;
+        kan::Client::StateMachineUpdateOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(resp_str, &response)) {
             std::cerr << "unmarshalling message failed." << std::endl;
             return -1;
@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
         std::string key = argv[2];
 
         std::string mar_str;
-        sisyphus::Client::StateMachineUpdateOps::Request request;
+        kan::Client::StateMachineUpdateOps::Request request;
         request.mutable_remove()->set_key(key);
         if (!roo::ProtoBuf::marshalling_to_string(request, &mar_str)) {
             std::cerr << "marshalling message failed." << std::endl;
@@ -130,14 +130,14 @@ int main(int argc, char* argv[]) {
 
         std::string resp_str;
         auto status = client.call_RPC(tzrpc::ServiceID::CLIENT_SERVICE,
-                                      sisyphus::Client::OpCode::kUpdate,
+                                      kan::Client::OpCode::kUpdate,
                                       mar_str, resp_str);
         if (status != RpcClientStatus::OK) {
             std::cerr << "call failed, return code [" << static_cast<uint8_t>(status) << "]" << std::endl;
             return -1;
         }
 
-        sisyphus::Client::StateMachineUpdateOps::Response response;
+        kan::Client::StateMachineUpdateOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(resp_str, &response)) {
             std::cerr << "unmarshalling message failed." << std::endl;
             return -1;
@@ -153,7 +153,7 @@ int main(int argc, char* argv[]) {
     } else if (::strncmp(argv[1], "keys", 4) == 0) {
 
         std::string mar_str;
-        sisyphus::Client::StateMachineSelectOps::Request request;
+        kan::Client::StateMachineSelectOps::Request request;
         request.mutable_range()->set_limit(0);
         if (!roo::ProtoBuf::marshalling_to_string(request, &mar_str)) {
             std::cerr << "marshalling message failed." << std::endl;
@@ -162,14 +162,14 @@ int main(int argc, char* argv[]) {
 
         std::string resp_str;
         auto status = client.call_RPC(tzrpc::ServiceID::CLIENT_SERVICE,
-                                      sisyphus::Client::OpCode::kSelect,
+                                      kan::Client::OpCode::kSelect,
                                       mar_str, resp_str);
         if (status != RpcClientStatus::OK) {
             std::cerr << "call failed, return code [" << static_cast<uint8_t>(status) << "]" << std::endl;
             return -1;
         }
 
-        sisyphus::Client::StateMachineSelectOps::Response response;
+        kan::Client::StateMachineSelectOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(resp_str, &response)) {
             std::cerr << "unmarshalling message failed." << std::endl;
             return -1;

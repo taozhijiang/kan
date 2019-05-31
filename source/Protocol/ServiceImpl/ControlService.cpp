@@ -13,7 +13,7 @@
 
 namespace tzrpc {
 
-using sisyphus::Captain;
+using kan::Captain;
 
 
 bool ControlService::init() {
@@ -162,7 +162,7 @@ int ControlService::module_status(std::string& module, std::string& name, std::s
 
 void ControlService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 
-    using sisyphus::Control::OpCode;
+    using kan::Control::OpCode;
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc_instance->get_opcode()) {
@@ -185,20 +185,20 @@ void ControlService::handle_RPC(std::shared_ptr<RpcInstance> rpc_instance) {
 void ControlService::control_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Control::OpCode::kSnapshot) {
+    if (rpc_request_message.header_.opcode != kan::Control::OpCode::kSnapshot) {
         roo::log_err("invalid opcode %u in service Control.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Control::ControlSnapshotOps::Request  request;
+    kan::Control::ControlSnapshotOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Control::ControlSnapshotOps::Response response;
+    kan::Control::ControlSnapshotOps::Response response;
     response.set_code(0);
     response.set_msg("OK");
 
@@ -226,13 +226,13 @@ void ControlService::control_snapshot_impl(std::shared_ptr<RpcInstance> rpc_inst
 void ControlService::control_stat_impl(std::shared_ptr<RpcInstance> rpc_instance) {
 
     RpcRequestMessage& rpc_request_message = rpc_instance->get_rpc_request_message();
-    if (rpc_request_message.header_.opcode != sisyphus::Control::OpCode::kStat) {
+    if (rpc_request_message.header_.opcode != kan::Control::OpCode::kStat) {
         roo::log_err("invalid opcode %u in service Control.", rpc_request_message.header_.opcode);
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
         return;
     }
 
-    sisyphus::Control::ControlStatOps::Request  request;
+    kan::Control::ControlStatOps::Request  request;
     if (!roo::ProtoBuf::unmarshalling_from_string(rpc_request_message.payload_, &request)) {
         roo::log_err("unmarshal request failed.");
         rpc_instance->reject(RpcResponseStatus::INVALID_REQUEST);
@@ -240,7 +240,7 @@ void ControlService::control_stat_impl(std::shared_ptr<RpcInstance> rpc_instance
     }
 
     // 返回报文格式
-    sisyphus::Control::ControlStatOps::Response response;
+    kan::Control::ControlStatOps::Response response;
     response.set_code(0);
     response.set_msg("OK");
 
@@ -263,4 +263,4 @@ void ControlService::control_stat_impl(std::shared_ptr<RpcInstance> rpc_instance
 }
 
 
-} // namespace sisyphus
+} // namespace tzrpc

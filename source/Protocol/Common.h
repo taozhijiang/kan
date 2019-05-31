@@ -20,7 +20,7 @@ enum {
 
 }
 
-} // end namespace sisyphus
+} // end namespace tzrpc
 
 
 #endif // __PROTOCOL_COMMON_H__

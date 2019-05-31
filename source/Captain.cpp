@@ -32,7 +32,7 @@
 #include "Captain.h"
 
 
-namespace sisyphus {
+namespace kan {
 
 // 在主线程中最先初始化，所以不考虑竞争条件问题
 Captain& Captain::instance() {
@@ -96,7 +96,7 @@ bool Captain::init(const std::string& cfgFile) {
         return false;
     }
     
-    net_server_ptr_ = std::make_shared<tzrpc::NetServer>("sisyphus_net_server");
+    net_server_ptr_ = std::make_shared<tzrpc::NetServer>("KanNetServer");
     if (!net_server_ptr_ || !net_server_ptr_->init()) {
         roo::log_err("init NetServer failed!");
         return false;
@@ -176,4 +176,4 @@ bool Captain::service_joinall() {
 }
 
 
-} // end namespace sisyphus
+} // end namespace kan
