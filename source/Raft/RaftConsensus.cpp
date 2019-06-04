@@ -48,9 +48,9 @@ bool RaftConsensus::init() {
     option_.raft_distr_timeout_ms_ = duration(raft_distr_timeout_ms);
 
     // 作为必填配置参数处理
-    if(option_.raft_distr_timeout_ms_.count() == 0)
+    if (option_.raft_distr_timeout_ms_.count() == 0)
         option_.raft_distr_timeout_ms_ = option_.election_timeout_ms_;
-    
+
     // if not found, will throw exceptions
     const libconfig::Setting& peers = setting_ptr->lookup("Raft.cluster_peers");
     for (int i = 0; i < peers.getLength(); ++i) {
@@ -212,12 +212,12 @@ int RaftConsensus::cluster_stat(std::string& stat) {
     std::stringstream ss;
 
     ss << std::endl
-       << "cluster stat current node: " << std::endl
-       << context_->str() << std::endl
-       << option_.str() << std::endl;
+        << "cluster stat current node: " << std::endl
+        << context_->str() << std::endl
+        << option_.str() << std::endl;
 
     ss << "apply_index: " << state_machine_->apply_index() << std::endl;
-    
+
     if (is_leader()) {
         for (auto iter = peer_set_.begin(); iter != peer_set_.end(); ++iter) {
             ss << std::endl
@@ -379,7 +379,7 @@ int RaftConsensus::state_machine_query(const std::string& cmd, std::string& quer
         }
 
         if (state_machine_->apply_index() < aim_index) {
-            roo::log_err("wait for state_machine apply entry %lu about %lu msec(s) timeout happens.", 
+            roo::log_err("wait for state_machine apply entry %lu about %lu msec(s) timeout happens.",
                          aim_index, option_.raft_distr_timeout_ms_.count());
             return -1;
         }
@@ -473,7 +473,7 @@ int RaftConsensus::state_machine_modify(const std::string& cmd, std::string& app
         }
 
         if (context_->commit_index() < aim_index) {
-            roo::log_err("replicate entry %lu about %lu msec(s) timeout happens.", 
+            roo::log_err("replicate entry %lu about %lu msec(s) timeout happens.",
                          aim_index, option_.raft_distr_timeout_ms_.count());
             return -1;
         }
@@ -537,28 +537,13 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
         return -1;
     }
 
-    // 解析异步响应报文，分发执行相应的消息处理
-    if (opcode == static_cast<uint16_t>(OpCode::kRequestVote)) {
-        Raft::RequestVoteOps::Response response;
-        if (!roo::ProtoBuf::unmarshalling_from_string(rsp, &response)) {
-            roo::log_err("ProtoBuf unmarshal RequestVoteOps response failed.");
-            return -1;
-        }
-        return continue_request_vote_bf_async(response);
-    } else if (opcode == static_cast<uint16_t>(OpCode::kAppendEntries)) {
-        Raft::AppendEntriesOps::Response response;
-        if (!roo::ProtoBuf::unmarshalling_from_string(rsp, &response)) {
-            roo::log_err("ProtoBuf unmarshal AppendEntriesOps response failed.");
-            return -1;
-        }
-        return continue_append_entries_bf_async(response);
-    } else if (opcode == static_cast<uint16_t>(OpCode::kInstallSnapshot)) {
-        Raft::InstallSnapshotOps::Response response;
-        if (!roo::ProtoBuf::unmarshalling_from_string(rsp, &response)) {
-            roo::log_err("ProtoBuf unmarshal InstallSnapshotOps response failed.");
-            return -1;
-        }
-        return continue_install_snapshot_bf_async(response);
+    if (opcode == static_cast<uint16_t>(OpCode::kRequestVote) ||
+        opcode == static_cast<uint16_t>(OpCode::kAppendEntries) ||
+        opcode == static_cast<uint16_t>(OpCode::kInstallSnapshot)) {
+        // 添加到延迟队列
+        auto func = std::bind(&RaftConsensus::continue_bf_async, this, opcode, rsp);
+        defer_cb_task_.add_defer_task(func);
+        return 0;
     }
 
     roo::log_err("Unexpected RPC call response with opcode %u", opcode);
@@ -676,7 +661,7 @@ int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::R
                      "so we reject this entry, and leader will override it later!",
                      request.prev_log_index(),
                      request.prev_log_term(), log_meta_->entry(request.prev_log_index())->term());
-        log_meta_->truncate_suffix(log_meta_->last_index() -1);
+        log_meta_->truncate_suffix(log_meta_->last_index() - 1);
         response.set_last_log_index(log_meta_->last_index());
 
         response.set_success(false);
@@ -756,7 +741,7 @@ int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOp
         // bump up our term
         context_->set_term(request.term());
         context_->update_meta();
-        
+
         response.set_term(context_->term());
     }
 
@@ -1266,6 +1251,8 @@ int RaftConsensus::send_install_snapshot(const Peer& peer) {
 
 void RaftConsensus::main_thread_loop() {
 
+    roo::log_warning("Node %lu main_thread_loop begin to run.", context_->id());
+
     while (!main_thread_stop_) {
 
         {
@@ -1320,6 +1307,38 @@ void RaftConsensus::main_thread_loop() {
                 break;
         }
     }
+
+    roo::log_warning("Node %lu main_thread_loop terminated.", context_->id());
+}
+
+int RaftConsensus::continue_bf_async(uint16_t opcode, std::string rsp_content) {
+
+    // 解析异步响应报文，分发执行相应的消息处理
+    if (opcode == static_cast<uint16_t>(OpCode::kRequestVote)) {
+        Raft::RequestVoteOps::Response response;
+        if (!roo::ProtoBuf::unmarshalling_from_string(rsp_content, &response)) {
+            roo::log_err("ProtoBuf unmarshal RequestVoteOps response failed.");
+            return -1;
+        }
+        return continue_request_vote_bf_async(response);
+    } else if (opcode == static_cast<uint16_t>(OpCode::kAppendEntries)) {
+        Raft::AppendEntriesOps::Response response;
+        if (!roo::ProtoBuf::unmarshalling_from_string(rsp_content, &response)) {
+            roo::log_err("ProtoBuf unmarshal AppendEntriesOps response failed.");
+            return -1;
+        }
+        return continue_append_entries_bf_async(response);
+    } else if (opcode == static_cast<uint16_t>(OpCode::kInstallSnapshot)) {
+        Raft::InstallSnapshotOps::Response response;
+        if (!roo::ProtoBuf::unmarshalling_from_string(rsp_content, &response)) {
+            roo::log_err("ProtoBuf unmarshal InstallSnapshotOps response failed.");
+            return -1;
+        }
+        return continue_install_snapshot_bf_async(response);
+    }
+
+    roo::log_err("Unhandled opcode found here: %u, rsp_content size: %lu", opcode, rsp_content.size());
+    return -1;
 }
 
 } // namespace kan

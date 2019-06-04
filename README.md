@@ -28,6 +28,8 @@ Update TPS: 257
 Select TPS: 1261   
 Update Select mix TPS: 120 + 690
 
+Better machine will produce higher scores, and these service eat lots of DISK throught. So avoid Aliyun if you really want to stress out the performance.
+
 
 This project is dedicated to my beloved son, wish you happy everyday!
 

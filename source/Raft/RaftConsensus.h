@@ -13,8 +13,10 @@
 
 #include <thread>
 
-
+#include <container/EQueue.h>
 #include <message/ProtoBuf.h>
+#include <concurrency/DeferTask.h>
+
 #include <Protocol/gen-cpp/Raft.pb.h>
 
 #include <Raft/Peer.h>
@@ -64,12 +66,15 @@ public:
         log_meta_(),
         option_(),
         context_(),
-        main_thread_stop_(false) {
+        main_thread_stop_(false),
+        defer_cb_task_() {
     }
 
     ~RaftConsensus() {
         if (main_thread_.joinable())
             main_thread_.join();
+
+        defer_cb_task_.terminate();
     }
 
     bool init();
@@ -95,6 +100,7 @@ public:
 private:
 
     // 处理异步客户端收到的Peer回调
+    int continue_bf_async(uint16_t opcode, std::string rsp_content);
     int continue_request_vote_bf_async(const Raft::RequestVoteOps::Response& response);
     int continue_append_entries_bf_async(const Raft::AppendEntriesOps::Response& response);
     int continue_install_snapshot_bf_async(const Raft::InstallSnapshotOps::Response& response);
@@ -118,7 +124,6 @@ private:
     int send_append_entries(const Peer& peer);
     int send_install_snapshot(const Peer& peer);
 
-    void main_thread_loop();
 
 private:
 
@@ -147,8 +152,14 @@ private:
     Option option_;
     std::unique_ptr<Context> context_;
 
+    // 主线程轮训，主要是根据当前的Role来作出对应决策，比如选举定时器超时等
     bool main_thread_stop_;
     std::thread main_thread_;
+    void main_thread_loop();
+
+    // 主要是对于RPC客户端异步回调，如果直接调用会导致io_service的线程阻塞住，
+    // 所以对于回调任务，都丢到一个队列中，然后使用这个异步线程执行(因为基本都是加锁了的，所以这边就直接用一个线程)
+    roo::DeferTask defer_cb_task_;
 
     // 状态机处理模块，机器对应的LevelDB底层存储模块
     std::unique_ptr<StateMachine> state_machine_;
