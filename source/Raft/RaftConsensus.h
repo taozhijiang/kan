@@ -89,9 +89,12 @@ public:
     bool is_leader() const;
     std::shared_ptr<Peer> get_peer(uint64_t peer_id) const;
 
+    // 状态机查询、快照相关的接口
     int state_machine_modify(const std::string& cmd, std::string& apply_out);
     int state_machine_query(const std::string& cmd, std::string& query_out);
     int state_machine_snapshot();
+
+    // 展示集群的状态信息，其中Leader节点的信息较多
     int cluster_stat(std::string& stat);
 
     void consensus_notify() { consensus_notify_.notify_all(); }
@@ -101,17 +104,17 @@ private:
 
     // 处理异步客户端收到的Peer回调
     int continue_bf_async(uint16_t opcode, std::string rsp_content);
-    int continue_request_vote_bf_async(const Raft::RequestVoteOps::Response& response);
-    int continue_append_entries_bf_async(const Raft::AppendEntriesOps::Response& response);
-    int continue_install_snapshot_bf_async(const Raft::InstallSnapshotOps::Response& response);
+    int on_request_vote_response_async(const Raft::RequestVoteOps::Response& response);
+    int on_append_entries_response_async(const Raft::AppendEntriesOps::Response& response);
+    int on_install_snapshot_response_async(const Raft::InstallSnapshotOps::Response& response);
 
     // 处理Peer发过来的RPC请求
-    int handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
-                                    Raft::RequestVoteOps::Response& response);
-    int handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
-                                      Raft::AppendEntriesOps::Response& response);
-    int handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
-                                        Raft::InstallSnapshotOps::Response& response);
+    int on_request_vote_request(const Raft::RequestVoteOps::Request& request,
+                                Raft::RequestVoteOps::Response& response);
+    int on_append_entries_request(const Raft::AppendEntriesOps::Request& request,
+                                  Raft::AppendEntriesOps::Response& response);
+    int on_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
+                                    Raft::InstallSnapshotOps::Response& response);
 
     // Leader检查cluster的日志状态
     // 当日志复制到绝大多数节点(next_index)的时候，就将其确认为提交的

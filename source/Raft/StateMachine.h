@@ -76,7 +76,7 @@ private:
 
     // 保存状态机的执行结果
     std::mutex apply_rsp_mutex_;
-    std::map<uint16_t, std::string> apply_rsp_;
+    std::map<uint64_t, std::string> apply_rsp_;
 
     bool main_executor_stop_;
     std::thread main_executor_;

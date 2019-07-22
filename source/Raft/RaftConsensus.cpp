@@ -55,9 +55,9 @@ bool RaftConsensus::init() {
     const libconfig::Setting& peers = setting_ptr->lookup("Raft.cluster_peers");
     for (int i = 0; i < peers.getLength(); ++i) {
 
-        uint64_t id;
+        int64_t id;
         std::string addr;
-        uint64_t port;
+        int64_t port;
         const libconfig::Setting& peer = peers[i];
 
         peer.lookupValue("server_id", id);
@@ -65,12 +65,14 @@ bool RaftConsensus::init() {
         peer.lookupValue("port", port);
 
         if (id == 0 || addr.empty() || port == 0) {
-            roo::log_err("Find problem peer setting: id %lu, addr %s, port %lu, skip this member.", id, addr.c_str(), port);
+            roo::log_err("Find problem peer setting: id %ld, addr %s, port %ld, skip this member.",
+                         id, addr.c_str(), port);
             continue;
         }
 
         if (option_.members_.find(id) != option_.members_.end()) {
-            roo::log_err("This node already added before: id %lu, addr %s, port %lu.", id, addr.c_str(), port);
+            roo::log_err("This node already added before: id %ld, addr %s, port %ld.",
+                         id, addr.c_str(), port);
             continue;
         }
 
@@ -554,8 +556,8 @@ int RaftConsensus::handle_rpc_callback(RpcClientStatus status, uint16_t service_
 //
 // 响应请求
 //
-int RaftConsensus::handle_request_vote_request(const Raft::RequestVoteOps::Request& request,
-                                               Raft::RequestVoteOps::Response& response) {
+int RaftConsensus::on_request_vote_request(const Raft::RequestVoteOps::Request& request,
+                                           Raft::RequestVoteOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -609,8 +611,8 @@ int RaftConsensus::handle_request_vote_request(const Raft::RequestVoteOps::Reque
     return 0;
 }
 
-int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::Request& request,
-                                                 Raft::AppendEntriesOps::Response& response) {
+int RaftConsensus::on_append_entries_request(const Raft::AppendEntriesOps::Request& request,
+                                             Raft::AppendEntriesOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -719,8 +721,8 @@ int RaftConsensus::handle_append_entries_request(const Raft::AppendEntriesOps::R
     return 0;
 }
 
-int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
-                                                   Raft::InstallSnapshotOps::Response& response) {
+int RaftConsensus::on_install_snapshot_request(const Raft::InstallSnapshotOps::Request& request,
+                                               Raft::InstallSnapshotOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -798,7 +800,7 @@ int RaftConsensus::handle_install_snapshot_request(const Raft::InstallSnapshotOp
 }
 
 
-int RaftConsensus::continue_request_vote_bf_async(const Raft::RequestVoteOps::Response& response) {
+int RaftConsensus::on_request_vote_response_async(const Raft::RequestVoteOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -815,6 +817,11 @@ int RaftConsensus::continue_request_vote_bf_async(const Raft::RequestVoteOps::Re
         meta.set_voted_for(response.peer_id());
         log_meta_->set_meta_data(meta);
         return 0;
+    }
+
+    if (response.term() < context_->term()) {
+        roo::log_err("old nonsense response callback, respect %lu, but got %lu.", context_->term(), response.term());
+        return -1;
     }
 
     auto iter = peer_set_.find(response.peer_id());
@@ -894,7 +901,7 @@ uint64_t RaftConsensus::advance_commit_index() const {
     values.emplace_back(log_meta_->last_index());
     std::sort(values.begin(), values.end());
 
-    return values.at((peer_set_.size() + 1 - 1) / 2);
+    return values.at((peer_set_.size() + 1 - 1) >> 1);
 }
 
 // 保证线性一致性读的epoch
@@ -907,10 +914,10 @@ uint64_t RaftConsensus::advance_epoch() const {
     values.emplace_back(context_->epoch());
     std::sort(values.begin(), values.end());
 
-    return values.at((peer_set_.size() + 1 - 1) / 2);
+    return values.at((peer_set_.size() + 1 - 1) >> 1);
 }
 
-int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps::Response& response) {
+int RaftConsensus::on_append_entries_response_async(const Raft::AppendEntriesOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -927,6 +934,13 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
         meta.set_voted_for(response.peer_id());
         log_meta_->set_meta_data(meta);
         return 0;
+    }
+
+    // 其实即使收到旧的响应也没有关系，因为Raft对于日志严格连续的约束，也可以在下一次
+    // 的append_entries中再补充进来，只要条件满足后正常移动commit_index就是OK的。
+    if (response.term() < context_->term()) {
+        roo::log_err("old nonsense response callback, respect %lu, but got %lu.", context_->term(), response.term());
+        return -1;
     }
 
     // 原始协议应该是prev_log_index + numEntries，但是这边没有原始调用的信息，所以
@@ -1014,7 +1028,7 @@ int RaftConsensus::continue_append_entries_bf_async(const Raft::AppendEntriesOps
 }
 
 
-int RaftConsensus::continue_install_snapshot_bf_async(const Raft::InstallSnapshotOps::Response& response) {
+int RaftConsensus::on_install_snapshot_response_async(const Raft::InstallSnapshotOps::Response& response) {
 
     std::lock_guard<std::mutex> lock(consensus_mutex_);
 
@@ -1035,7 +1049,8 @@ int RaftConsensus::continue_install_snapshot_bf_async(const Raft::InstallSnapsho
 
     auto iter = peer_set_.find(response.peer_id());
     if (iter == peer_set_.end()) {
-        std::string msg = roo::va_format("InstallSnapshot received response outside of cluster with id %lu.", response.peer_id());
+        std::string msg = roo::va_format("InstallSnapshot received response outside of cluster with id %lu.",
+                                         response.peer_id());
         PANIC(msg.c_str());
     }
     auto peer_ptr = iter->second;
@@ -1320,21 +1335,21 @@ int RaftConsensus::continue_bf_async(uint16_t opcode, std::string rsp_content) {
             roo::log_err("ProtoBuf unmarshal RequestVoteOps response failed.");
             return -1;
         }
-        return continue_request_vote_bf_async(response);
+        return on_request_vote_response_async(response);
     } else if (opcode == static_cast<uint16_t>(OpCode::kAppendEntries)) {
         Raft::AppendEntriesOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(rsp_content, &response)) {
             roo::log_err("ProtoBuf unmarshal AppendEntriesOps response failed.");
             return -1;
         }
-        return continue_append_entries_bf_async(response);
+        return on_append_entries_response_async(response);
     } else if (opcode == static_cast<uint16_t>(OpCode::kInstallSnapshot)) {
         Raft::InstallSnapshotOps::Response response;
         if (!roo::ProtoBuf::unmarshalling_from_string(rsp_content, &response)) {
             roo::log_err("ProtoBuf unmarshal InstallSnapshotOps response failed.");
             return -1;
         }
-        return continue_install_snapshot_bf_async(response);
+        return on_install_snapshot_response_async(response);
     }
 
     roo::log_err("Unhandled opcode found here: %u, rsp_content size: %lu", opcode, rsp_content.size());

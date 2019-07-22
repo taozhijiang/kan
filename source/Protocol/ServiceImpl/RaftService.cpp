@@ -202,7 +202,7 @@ void RaftService::request_vote_impl(std::shared_ptr<RpcInstance> rpc_instance) {
     }
 
     kan::Raft::RequestVoteOps::Response response;
-    int ret = Captain::instance().raft_consensus_ptr_->handle_request_vote_request(request, response);
+    int ret = Captain::instance().raft_consensus_ptr_->on_request_vote_request(request, response);
     if (ret != 0) {
         roo::log_err("handle request_vote return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
@@ -231,7 +231,7 @@ void RaftService::append_entries_impl(std::shared_ptr<RpcInstance> rpc_instance)
     }
 
     kan::Raft::AppendEntriesOps::Response response;
-    int ret = Captain::instance().raft_consensus_ptr_->handle_append_entries_request(request, response);
+    int ret = Captain::instance().raft_consensus_ptr_->on_append_entries_request(request, response);
     if (ret != 0) {
         roo::log_err("handle append_entries return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
@@ -261,7 +261,7 @@ void RaftService::install_snapshot_impl(std::shared_ptr<RpcInstance> rpc_instanc
     }
 
     kan::Raft::InstallSnapshotOps::Response response;
-    int ret = Captain::instance().raft_consensus_ptr_->handle_install_snapshot_request(request, response);
+    int ret = Captain::instance().raft_consensus_ptr_->on_install_snapshot_request(request, response);
     if (ret != 0) {
         roo::log_err("handle install_snapshot return %d", ret);
         rpc_instance->reject(RpcResponseStatus::SYSTEM_ERROR);
